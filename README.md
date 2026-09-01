@@ -62,6 +62,10 @@ On Windows this is normally `C:\Users\YOUR_NAME\.gradle\gradle.properties`. Neve
 
 See `DEPLOYMENT.md` for the rest.
 
+## Verify the live race contract
+
+After deploying Supabase, run `scripts/live-race-test.mjs` with `SUPABASE_URL` and `SUPABASE_ANON_KEY` in the process environment. It creates two disposable anonymous players and sends simultaneous takeover requests against the same reign. The command fails unless exactly one player wins, the loser receives `STALE_REIGN`, the loser keeps every Revenge Ticket, and the server records the winner as the sole owner.
+
 ## Product model
 
 The WhatsApp prototype showed that speed, retakes, stealing words, and rivalry produced the fun. Charging for every takeover would destroy that tempo. ONE therefore monetizes impatience:

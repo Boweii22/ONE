@@ -106,10 +106,6 @@ import com.oneglobal.billboard.ui.theme.Orange
 import com.oneglobal.billboard.ui.theme.Paper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.random.Random
 
 private val mono = FontFamily.Monospace
 private val display = FontFamily.SansSerif
@@ -295,7 +291,7 @@ private fun LiveScreen(
     val protectedSeconds = ((world.reign.protectedUntilMillis - now + 999L) / 1_000L).toInt().coerceAtLeast(0)
 
     Box(Modifier.fillMaxSize()) {
-        LiveField(accent = accent, owner = world.reign.owner.countryCode, modifier = Modifier.fillMaxSize())
+        LiveField(accent = accent, modifier = Modifier.fillMaxSize())
 
         Column(
             Modifier
@@ -712,7 +708,7 @@ private fun ChallengeOverlay(
     val busy = ui.challengePhase !in listOf(ChallengePhase.IDLE, ChallengePhase.FAILED)
 
     Box(Modifier.fillMaxSize().background(Ink)) {
-        LiveField(accent, "ONE", Modifier.fillMaxSize().graphicsLayer { alpha = .45f })
+        LiveField(accent, Modifier.fillMaxSize().graphicsLayer { alpha = .45f })
         Column(
             Modifier
                 .fillMaxSize()
@@ -1026,29 +1022,11 @@ private fun NavItem(icon: String, label: String, tab: MainTab, selected: MainTab
 }
 
 @Composable
-private fun LiveField(accent: Color, owner: String, modifier: Modifier = Modifier) {
-    // Keep the full-screen field static. Repainting a device-sized radial gradient at
-    // 60 fps adds heat without adding meaning; the live counters provide the motion.
-    val phase = remember(owner) { ((owner.hashCode() and 0xFF) / 255f).coerceIn(.18f, .82f) }
-    val particles = remember(owner) {
-        val random = Random(owner.hashCode())
-        List(13) { Offset(random.nextFloat(), random.nextFloat()) }
-    }
-    Canvas(modifier) {
-        drawRect(Brush.radialGradient(listOf(accent.copy(alpha = .19f), Color.Transparent), center = Offset(size.width * (.15f + phase * .7f), size.height * .28f), radius = size.width * .9f))
-        val spacing = 42.dp.toPx()
-        var x = -size.height + (phase * spacing)
-        while (x < size.width + size.height) {
-            drawLine(Color.White.copy(alpha = .018f), Offset(x, 0f), Offset(x - size.height, size.height), 1.dp.toPx())
-            x += spacing
-        }
-        particles.forEachIndexed { index, point ->
-            val pulse = ((phase + index * .13f) % 1f)
-            val position = Offset(point.x * size.width, point.y * size.height)
-            drawCircle(accent.copy(alpha = (1f - pulse) * .16f), 4.dp.toPx() + pulse * 16.dp.toPx(), position, style = Stroke(1.dp.toPx()))
-            drawCircle(accent.copy(alpha = .55f), 1.5.dp.toPx(), position)
-        }
-    }
+private fun LiveField(accent: Color, modifier: Modifier = Modifier) {
+    // A device-sized radial shader made first render catastrophically slow on some
+    // Android GPUs. Keep the field intentionally minimal: ONE's typography and live
+    // state carry the visual drama, while the background stays cheap and responsive.
+    Box(modifier.background(Ink).background(accent.copy(alpha = .035f)))
 }
 
 @Composable

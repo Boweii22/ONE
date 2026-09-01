@@ -1,8 +1,20 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val oneLocalProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use(::load)
+}
+
+fun onePublicValue(name: String, fallback: String = ""): String =
+    providers.gradleProperty(name).orNull
+        ?: oneLocalProperties.getProperty(name)
+        ?: fallback
 
 android {
     namespace = "com.oneglobal.billboard"
@@ -18,16 +30,26 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
 
-        val revenueCatKey = providers.gradleProperty("REVENUECAT_API_KEY").orNull ?: ""
-        val oneSignalId = providers.gradleProperty("ONESIGNAL_APP_ID").orNull ?: ""
-        val supabaseUrl = providers.gradleProperty("SUPABASE_URL").orNull ?: ""
-        val supabaseAnonKey = providers.gradleProperty("SUPABASE_ANON_KEY").orNull ?: ""
-        val oneWebUrl = providers.gradleProperty("ONE_WEB_URL").orNull ?: "https://ownone.app"
+        val revenueCatKey = onePublicValue("REVENUECAT_API_KEY")
+        val oneSignalId = onePublicValue("ONESIGNAL_APP_ID")
+        val supabaseUrl = onePublicValue("SUPABASE_URL")
+        val supabaseAnonKey = onePublicValue("SUPABASE_ANON_KEY")
+        val oneWebUrl = onePublicValue("ONE_WEB_URL", "https://ownone.app")
         buildConfigField("String", "REVENUECAT_API_KEY", "\"$revenueCatKey\"")
         buildConfigField("String", "ONESIGNAL_APP_ID", "\"$oneSignalId\"")
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
         buildConfigField("String", "ONE_WEB_URL", "\"$oneWebUrl\"")
+    }
+
+    buildTypes {
+        getByName("release") {
+            val url = onePublicValue("SUPABASE_URL")
+            val key = onePublicValue("SUPABASE_ANON_KEY")
+            if (!url.startsWith("https://") || key.isBlank()) {
+                throw GradleException("Release builds require a live SUPABASE_URL and SUPABASE_ANON_KEY.")
+            }
+        }
     }
 
     buildFeatures {

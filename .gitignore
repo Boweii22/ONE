@@ -18,4 +18,6 @@ web/.wrangler/
 *.apk
 *.aab
 screenshots/
-
+supabase/.temp/
+one-*.png
+one-*.xml
