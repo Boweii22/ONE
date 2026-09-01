@@ -1,0 +1,14 @@
+<resources>
+    <style name="Theme.ONE" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:statusBarColor">#070708</item>
+        <item name="android:navigationBarColor">#070708</item>
+        <item name="android:windowBackground">#070708</item>
+        <item name="android:windowSplashScreenBackground">#070708</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

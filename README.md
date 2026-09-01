@@ -78,4 +78,3 @@ The cooldown and protection values live in `public.app_settings`, so they can be
 ONE is public user-generated content. The backend blocks obvious links, contact details, scams, and violent phrases; uncertain messages enter review instead of going live. Production operation still requires a human moderation console, published contact information, ban/appeal handling, and monitoring of the included emergency kill switch.
 
 No hackathon result is guaranteed. This implementation makes the multiplayer, monetization, moderation, and audience claims technically demonstrable instead of simulated.
-

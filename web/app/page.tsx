@@ -1,0 +1,243 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Clock3, Eye, Radio, Share2, ShieldCheck, Swords, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+type Activity = {
+  sequence: number;
+  owner: string;
+  message: string;
+  started_at_ms: number;
+  used_ticket: boolean;
+};
+
+type Reaction = { reaction: string; handle: string; created_at_ms: number };
+
+type OneState = {
+  server_time_ms: number;
+  connected: boolean;
+  app_views: number;
+  web_views: number;
+  live_watchers: number;
+  takeovers_today: number;
+  reign: {
+    id: string;
+    sequence: number;
+    started_at_ms: number;
+    protected_until_ms: number;
+    palette: string;
+    owner: { id: string; handle: string; city: string; country_code: string; initials: string };
+    message: { id: string; text: string };
+  };
+  activity: Activity[];
+  reactions: Reaction[];
+};
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
+const accentByPalette: Record<string, string> = {
+  ACID: '#c8ff33', COBALT: '#5865ff', ORANGE: '#ff7043', MAGENTA: '#ff4ca4', ICE: '#67dfff',
+};
+
+async function rpc<T>(name: string, body: object, token?: string): Promise<T> {
+  if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('backend_not_configured');
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY,
+      authorization: `Bearer ${token || SUPABASE_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<T>;
+}
+
+type BrowserSession = {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number;
+};
+
+async function anonymousToken(forceRefresh = false): Promise<string | undefined> {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return undefined;
+  const raw = localStorage.getItem('one_web_session');
+  let cached: BrowserSession | undefined;
+  try {
+    cached = raw ? (JSON.parse(raw) as BrowserSession) : undefined;
+  } catch {
+    localStorage.removeItem('one_web_session');
+  }
+  if (!forceRefresh && cached?.access_token && cached.expires_at > Date.now() + 60_000) {
+    return cached.access_token;
+  }
+
+  const refreshing = Boolean(cached?.refresh_token);
+  const response = await fetch(
+    refreshing
+      ? `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`
+      : `${SUPABASE_URL}/auth/v1/signup`,
+    {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, 'content-type': 'application/json' },
+      body: refreshing ? JSON.stringify({ refresh_token: cached?.refresh_token }) : '{}',
+    },
+  );
+  if (!response.ok) {
+    if (refreshing) {
+      localStorage.removeItem('one_web_session');
+      return anonymousToken(false);
+    }
+    return undefined;
+  }
+  const payload = await response.json();
+  const session: BrowserSession = {
+    access_token: String(payload.access_token ?? ''),
+    refresh_token: String(payload.refresh_token ?? cached?.refresh_token ?? ''),
+    expires_at: Date.now() + Number(payload.expires_in ?? 3600) * 1000,
+  };
+  if (session.access_token) localStorage.setItem('one_web_session', JSON.stringify(session));
+  return session.access_token || undefined;
+}
+
+function duration(milliseconds: number) {
+  const total = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  return hours
+    ? `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+    : `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function compact(value: number) {
+  return new Intl.NumberFormat('en', { notation: value > 9999 ? 'compact' : 'standard' }).format(value);
+}
+
+export default function Home() {
+  const [state, setState] = useState<OneState | null>(null);
+  const [status, setStatus] = useState<'connecting' | 'live' | 'unconfigured' | 'offline'>('connecting');
+  const [now, setNow] = useState(Date.now());
+
+  const load = useCallback(async (token?: string) => {
+    try {
+      const next = await rpc<OneState>('get_one_state', {}, token);
+      setState(next);
+      setStatus('live');
+    } catch (error) {
+      setStatus(error instanceof Error && error.message === 'backend_not_configured' ? 'unconfigured' : 'offline');
+    }
+  }, []);
+
+  useEffect(() => {
+    let stopped = false;
+    let poll: ReturnType<typeof setInterval> | undefined;
+    let pulse: ReturnType<typeof setInterval> | undefined;
+    let clock: ReturnType<typeof setInterval> | undefined;
+    let renew: ReturnType<typeof setInterval> | undefined;
+    void (async () => {
+      let token = await anonymousToken();
+      if (stopped) return;
+      await load(token);
+      if (token) void rpc('heartbeat', { p_source: 'web' }, token).catch(() => undefined);
+      poll = setInterval(() => void load(token), 1600);
+      pulse = setInterval(() => {
+        if (token) void rpc('heartbeat', { p_source: 'web' }, token).catch(() => undefined);
+      }, 8000);
+      clock = setInterval(() => setNow(Date.now()), 1000);
+      renew = setInterval(() => {
+        void anonymousToken(true).then((next) => {
+          if (next) token = next;
+        });
+      }, 45 * 60 * 1000);
+    })();
+    return () => {
+      stopped = true;
+      if (poll) clearInterval(poll);
+      if (pulse) clearInterval(pulse);
+      if (clock) clearInterval(clock);
+      if (renew) clearInterval(renew);
+    };
+  }, [load]);
+
+  const accent = state ? accentByPalette[state.reign.palette] || accentByPalette.ACID : accentByPalette.ACID;
+  const reignTime = useMemo(() => state ? duration(now - state.reign.started_at_ms) : '00:00', [now, state]);
+  const reactions = state?.reactions.slice(0, 5) ?? [];
+
+  const share = async () => {
+    const text = state
+      ? `${state.reign.owner.handle} owns ONE: “${state.reign.message.text}”\nWatch the only live screen.`
+      : 'Watch ONE — the only live screen.';
+    if (navigator.share) await navigator.share({ title: 'ONE', text, url: location.href });
+    else await navigator.clipboard.writeText(`${text}\n${location.href}`);
+  };
+
+  return (
+    <main className="one-shell" style={{ '--accent': accent } as React.CSSProperties}>
+      <div className="grid-glow" aria-hidden="true" />
+      <header className="topbar">
+        <a href="/" className="brand" aria-label="ONE home"><strong>1</strong><span>ONE</span></a>
+        <div className={`live-pill ${status}`}><i /><span>{status === 'live' ? 'LIVE WORLD STATE' : status.replace('_', ' ')}</span></div>
+        <Button variant="outline" className="share-button" onClick={() => void share()}><Share2 /> Share reign</Button>
+      </header>
+
+      {state ? (
+        <div className="stage-layout">
+          <section className="live-stage" aria-live="polite">
+            <div className="stage-kicker"><Radio /><span>THE ONLY LIVE SCREEN</span><b>#{state.reign.sequence}</b></div>
+            <div className="owner-line">
+              <div className="avatar">{state.reign.owner.initials}</div>
+              <div><strong>{state.reign.owner.handle}</strong><span>{state.reign.owner.city}, {state.reign.owner.country_code} OWNS ONE</span></div>
+            </div>
+            <blockquote>{state.reign.message.text}</blockquote>
+            <div className="accent-rule"><span /><em>TAKE IT IN THE ANDROID APP</em></div>
+            <div className="crowd-strip">
+              {reactions.length ? reactions.map((reaction, index) => (
+                <span key={`${reaction.created_at_ms}-${index}`}><b>{reaction.reaction}</b> {reaction.handle}</span>
+              )) : <span><b>THE CROWD IS QUIET.</b> SOMEONE MAKE A MOVE.</span>}
+            </div>
+          </section>
+
+          <aside className="scoreboard">
+            <div className="score-head"><span>BATTLE STATE</span><Swords /></div>
+            <Metric icon={<Clock3 />} value={reignTime} label="CURRENT REIGN" />
+            <Metric icon={<Users />} value={compact(state.live_watchers)} label="WATCHING NOW" />
+            <Metric icon={<Eye />} value={compact(state.app_views + state.web_views)} label="VERIFIED VIEWS" />
+            <Metric icon={<ShieldCheck />} value={compact(state.takeovers_today)} label="TAKEOVERS TODAY" />
+            <div className="source-split"><span>APP <b>{compact(state.app_views)}</b></span><span>WEB <b>{compact(state.web_views)}</b></span></div>
+            <div className="download-card"><small>THINK YOU CAN TAKE IT?</small><strong>THE WEB CAN WATCH.<br />ONLY THE APP CAN STEAL.</strong><span>Android closed beta opening soon.</span></div>
+          </aside>
+
+          <section className="battle-feed">
+            <div className="feed-title"><span>RECENT TAKEOVERS</span><b>{state.activity.length} DELIVERED</b></div>
+            <div className="feed-list">
+              {state.activity.slice(0, 7).map((item, index) => (
+                <article key={item.sequence} className={index === 0 ? 'current' : ''}>
+                  <span className="feed-seq">#{item.sequence}</span>
+                  <div><strong>{item.owner}</strong><p>{item.message}</p></div>
+                  {item.used_ticket && <em>REVENGE</em>}
+                  <time>{duration(now - item.started_at_ms)}</time>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : (
+        <section className="connection-state">
+          <span>1</span>
+          <p>{status === 'unconfigured' ? 'THE LIVE BACKEND IS NOT CONNECTED YET.' : 'CONNECTING TO THE ONLY SCREEN…'}</p>
+          <small>{status === 'unconfigured' ? 'Set the Supabase public URL and key to begin the founding reign.' : 'No simulated audience. No fake numbers.'}</small>
+        </section>
+      )}
+
+      <footer><span>ONE / PUBLIC SPECTATOR</span><span>EVERY NUMBER ON THIS PAGE COMES FROM THE LIVE LEDGER.</span></footer>
+    </main>
+  );
+}
+
+function Metric({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  return <div className="metric"><span>{icon}</span><div><strong>{value}</strong><small>{label}</small></div></div>;
+}

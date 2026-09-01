@@ -1,0 +1,17 @@
+project_id = "one-global"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[auth]
+enabled = true
+enable_anonymous_sign_ins = true
+
+[functions.revenuecat-webhook]
+verify_jwt = false
+
+[functions.onesignal-takeover]
+verify_jwt = false
