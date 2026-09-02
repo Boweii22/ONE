@@ -33,6 +33,15 @@ if (!profile.response.ok) {
   throw new Error(`Profile creation failed with ${profile.response.status}.`);
 }
 
+const state = await jsonRequest('/rest/v1/rpc/get_one_state', {
+  method: 'POST',
+  headers: auth,
+  body: '{}',
+});
+if (!state.response.ok || !state.payload.reign?.id || state.payload.connected !== true) {
+  throw new Error(`Live state failed with ${state.response.status}.`);
+}
+
 // @ONE already exists. Without the new trigger this would fail as a duplicate;
 // with the migration it must be rejected earlier as an explicitly protected ID.
 const protectedAttempt = await jsonRequest('/rest/v1/rpc/update_handle', {
@@ -46,5 +55,4 @@ if (protectedAttempt.response.ok || !detail.includes('HANDLE_RESERVED')) {
   throw new Error(`Expected HANDLE_RESERVED from production, received ${protectedAttempt.response.status}: ${detail}`);
 }
 
-console.log('PASS: production rejected @ONE through the reserved-handle trigger.');
-
+console.log('PASS: anonymous auth, profile, live state, and reserved-handle enforcement are healthy.');
