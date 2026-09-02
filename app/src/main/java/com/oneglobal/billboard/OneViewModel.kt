@@ -1,6 +1,7 @@
 package com.oneglobal.billboard
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.oneglobal.billboard.data.AuctionRules
@@ -30,6 +31,7 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         DemoOneRepository()
     }
     val world = repository.world
+    private val profilePreferences = application.getSharedPreferences("one_profile_ui", Context.MODE_PRIVATE)
 
     private val _ui = MutableStateFlow(OneUiState())
     val ui: StateFlow<OneUiState> = _ui.asStateFlow()
@@ -62,6 +64,27 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     is OneEvent.MessageRejected -> _ui.update {
                         it.copy(composeError = event.reason, toast = event.reason)
+                    }
+                    is OneEvent.HandleUpdated -> {
+                        markHandlePromptSeen()
+                        _ui.update { current ->
+                            val initials = event.handle.removePrefix("@").take(2)
+                            val updatedReceipt = current.receipt?.let { receipt ->
+                                receipt.copy(owner = receipt.owner.copy(handle = event.handle, initials = initials))
+                            }
+                            current.copy(
+                                overlay = if (current.handleAfterFirstWin && updatedReceipt != null) Overlay.RECEIPT else Overlay.NONE,
+                                receipt = updatedReceipt,
+                                handleText = "",
+                                handleError = null,
+                                handleSaving = false,
+                                handleAfterFirstWin = false,
+                                toast = "${event.handle} IS NOW LIVE",
+                            )
+                        }
+                    }
+                    is OneEvent.HandleRejected -> _ui.update {
+                        it.copy(handleSaving = false, handleError = event.reason)
                     }
                     is OneEvent.CreditsGranted -> _ui.update {
                         it.copy(toast = "+${event.amount} CREDITS // ${event.source}")
@@ -111,7 +134,19 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                     delay(2_100)
-                    _ui.update { it.copy(overlay = Overlay.RECEIPT) }
+                    if (shouldPromptForHandle()) {
+                        _ui.update {
+                            it.copy(
+                                overlay = Overlay.HANDLE,
+                                handleText = "",
+                                handleError = null,
+                                handleSaving = false,
+                                handleAfterFirstWin = true,
+                            )
+                        }
+                    } else {
+                        _ui.update { it.copy(overlay = Overlay.RECEIPT) }
+                    }
                 }
                 is ChallengeResult.Failure -> _ui.update {
                     it.copy(
@@ -125,6 +160,10 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun closeOverlay() {
+        if (_ui.value.overlay == Overlay.HANDLE) {
+            dismissHandleEditor()
+            return
+        }
         _ui.update {
             it.copy(
                 overlay = Overlay.NONE,
@@ -171,6 +210,56 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateHandle(handle: String) {
         viewModelScope.launch { repository.updateHandle(handle) }
+    }
+
+    fun openHandleEditor() {
+        val existing = world.value.currentUser?.handle.orEmpty()
+        _ui.update {
+            it.copy(
+                overlay = Overlay.HANDLE,
+                handleText = existing.takeUnless(::isFallbackHandle).orEmpty().removePrefix("@"),
+                handleError = null,
+                handleSaving = false,
+                handleAfterFirstWin = false,
+            )
+        }
+    }
+
+    fun updateHandleText(raw: String) {
+        if (raw.length > AuctionRules.HANDLE_MAX + 1) return
+        val candidate = raw.removePrefix("@").uppercase()
+        _ui.update {
+            it.copy(
+                handleText = candidate,
+                handleError = AuctionRules.validateHandle(candidate).takeIf { candidate.isNotBlank() },
+            )
+        }
+    }
+
+    fun submitHandle() {
+        if (_ui.value.handleSaving) return
+        val candidate = AuctionRules.normalizeHandle(_ui.value.handleText)
+        val error = AuctionRules.validateHandle(candidate)
+        if (error != null) {
+            _ui.update { it.copy(handleError = error) }
+            return
+        }
+        _ui.update { it.copy(handleText = candidate, handleError = null, handleSaving = true) }
+        updateHandle(candidate)
+    }
+
+    fun dismissHandleEditor() {
+        val afterFirstWin = _ui.value.handleAfterFirstWin
+        if (afterFirstWin) markHandlePromptSeen()
+        _ui.update {
+            it.copy(
+                overlay = if (afterFirstWin && it.receipt != null) Overlay.RECEIPT else Overlay.NONE,
+                handleText = "",
+                handleError = null,
+                handleSaving = false,
+                handleAfterFirstWin = false,
+            )
+        }
     }
 
     fun openVault() {
@@ -238,4 +327,17 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         }
         super.onCleared()
     }
+
+    private fun shouldPromptForHandle(): Boolean {
+        val user = world.value.currentUser ?: return false
+        if (!isFallbackHandle(user.handle)) return false
+        return !profilePreferences.getBoolean("handle_prompted_${user.id}", false)
+    }
+
+    private fun markHandlePromptSeen() {
+        val userId = world.value.currentUserId.takeIf { it.isNotBlank() } ?: return
+        profilePreferences.edit().putBoolean("handle_prompted_$userId", true).apply()
+    }
+
+    private fun isFallbackHandle(handle: String): Boolean = handle.startsWith("@PLAYER_")
 }

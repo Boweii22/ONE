@@ -11,6 +11,7 @@ enum class Overlay {
     NONE,
     CHALLENGE,
     RECEIPT,
+    HANDLE,
     COMPOSE,
     VAULT,
     REPORT,
@@ -143,6 +144,10 @@ data class OneUiState(
     val receipt: ReignReceipt? = null,
     val composeText: String = "",
     val composeError: String? = null,
+    val handleText: String = "",
+    val handleError: String? = null,
+    val handleSaving: Boolean = false,
+    val handleAfterFirstWin: Boolean = false,
     val toast: String? = null,
     val revengeBanner: String? = null,
     val adProgress: Float = 0f,
@@ -156,6 +161,8 @@ sealed interface OneEvent {
     data class RivalTakeover(val receipt: ReignReceipt) : OneEvent
     data class MessageApproved(val message: OneMessage) : OneEvent
     data class MessageRejected(val reason: String) : OneEvent
+    data class HandleUpdated(val handle: String) : OneEvent
+    data class HandleRejected(val reason: String) : OneEvent
     data class CreditsGranted(val amount: Int, val source: String) : OneEvent
     data class Error(val message: String) : OneEvent
 }

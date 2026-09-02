@@ -188,10 +188,10 @@ class CloudOneRepository(context: Context) : OneRepository {
 
     override suspend fun updateHandle(handle: String) {
         runCatching {
-            rpc("update_handle", JSONObject().put("p_handle", handle), authenticated = true)
+            val result = rpc("update_handle", JSONObject().put("p_handle", handle), authenticated = true)
             refreshWorld()
-            _events.emit(OneEvent.Error("Your global handle is now live."))
-        }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
+            _events.emit(OneEvent.HandleUpdated(result.optString("handle", "@$handle")))
+        }.onFailure { _events.emit(OneEvent.HandleRejected(it.userMessage())) }
     }
 
     private suspend fun refreshWorld() {
@@ -394,7 +394,12 @@ class CloudOneRepository(context: Context) : OneRepository {
     }
 
     private fun Throwable.userMessage(): String = when (this) {
-        is ApiException -> message ?: "ONE request failed."
+        is ApiException -> when {
+            message?.contains("HANDLE_RESERVED") == true -> "That handle is protected. Choose an original alias."
+            message?.contains("HANDLE_ALREADY_TAKEN") == true -> "That handle already belongs to someone."
+            message?.contains("HANDLE_MUST_BE_3_TO_18_CHARACTERS") == true -> "Use 3 to 18 characters."
+            else -> message ?: "ONE request failed."
+        }
         else -> "Cannot reach ONE. Check your connection and backend configuration."
     }
 

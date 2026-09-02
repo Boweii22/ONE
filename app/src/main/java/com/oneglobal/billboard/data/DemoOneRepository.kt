@@ -38,7 +38,7 @@ class DemoOneRepository : OneRepository {
     private var rivalJob: Job? = null
     private val random = Random(0x0A11CE)
 
-    private val user = OneOwner(
+    private var user = OneOwner(
         id = "user_bowei",
         handle = "@BOWEI",
         city = "LONDON",
@@ -123,6 +123,7 @@ class DemoOneRepository : OneRepository {
             hall = seededHall(),
             history = emptyList(),
             takeoversToday = 1,
+            currentUser = user,
         ),
     )
     override val world: StateFlow<WorldState> = _world.asStateFlow()
@@ -346,7 +347,27 @@ class DemoOneRepository : OneRepository {
     }
 
     override suspend fun updateHandle(handle: String) {
-        _events.emit(OneEvent.Error("Handle changes become global when the cloud backend is connected."))
+        val error = AuctionRules.validateHandle(handle)
+        if (error != null) {
+            _events.emit(OneEvent.HandleRejected(error))
+            return
+        }
+        val normalized = AuctionRules.normalizeHandle(handle)
+        val updated = user.copy(handle = "@$normalized", initials = normalized.take(2))
+        user = updated
+        _world.update { current ->
+            current.copy(
+                currentUser = updated,
+                reign = if (current.reign.owner.id == updated.id) current.reign.copy(owner = updated) else current.reign,
+                hall = current.hall.map { entry ->
+                    if (entry.owner.id == updated.id) entry.copy(owner = updated) else entry
+                },
+                history = current.history.map { receipt ->
+                    if (receipt.owner.id == updated.id) receipt.copy(owner = updated) else receipt
+                },
+            )
+        }
+        _events.emit(OneEvent.HandleUpdated(updated.handle))
     }
 
     fun close() {

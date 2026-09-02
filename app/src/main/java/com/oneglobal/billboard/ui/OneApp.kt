@@ -71,8 +71,11 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -186,6 +189,7 @@ fun OneApp(
                     onVault = viewModel::openVault,
                     onEnablePush = { viewModel.enablePush(onRequestPush) },
                     onShareONE = onShareONE,
+                    onEditHandle = viewModel::openHandleEditor,
                 )
             }
         }
@@ -242,6 +246,14 @@ fun OneApp(
                     world = world,
                     onClose = viewModel::closeOverlay,
                     onShare = { ui.receipt?.let(onShareReceipt) },
+                )
+                Overlay.HANDLE -> HandleOverlay(
+                    world = world,
+                    ui = ui,
+                    onTextChanged = viewModel::updateHandleText,
+                    onSubmit = viewModel::submitHandle,
+                    onKeepAnonymous = viewModel::dismissHandleEditor,
+                    onClose = viewModel::dismissHandleEditor,
                 )
                 Overlay.COMPOSE -> ComposeOverlay(
                     ui = ui,
@@ -630,6 +642,7 @@ private fun YouScreen(
     onVault: () -> Unit,
     onEnablePush: () -> Unit,
     onShareONE: () -> Unit,
+    onEditHandle: () -> Unit,
 ) {
     val user = world.currentUser
     val handle = user?.handle ?: if (world.demoMode) "@BOWEI" else "@CONNECTING"
@@ -659,6 +672,14 @@ private fun YouScreen(
         Spacer(Modifier.height(12.dp))
         DailyCapCard(world)
         Spacer(Modifier.height(12.dp))
+        SettingsCard(
+            title = "PUBLIC HANDLE",
+            detail = "$handle is your public alias. ONE never asks for your legal name.",
+            badge = "EDIT",
+            accent = Ice,
+            onClick = onEditHandle,
+        )
+        Spacer(Modifier.height(10.dp))
         SettingsCard(
             title = "REVENGE ALERTS",
             detail = if (ui.pushEnabled) "Armed. You’ll know the second ONE is taken." else "Get the exact views from your reign when dethroned.",
@@ -763,6 +784,166 @@ private fun ChallengeOverlay(
             RuleStrip("free steal cooldown", "instant revenge ticket", "atomic race")
         }
         if (ui.challengePhase == ChallengePhase.WON) TakeoverFlash(Modifier.fillMaxSize())
+    }
+}
+
+@Composable
+private fun HandleOverlay(
+    world: WorldState,
+    ui: OneUiState,
+    onTextChanged: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onKeepAnonymous: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val currentAlias = world.currentUser?.handle ?: "@PLAYER"
+    val candidate = AuctionRules.normalizeHandle(ui.handleText)
+    val valid = ui.handleText.isNotBlank() && AuctionRules.validateHandle(candidate) == null
+    val remaining = AuctionRules.HANDLE_MAX - candidate.length
+
+    LaunchedEffect(Unit) {
+        delay(260)
+        focusRequester.requestFocus()
+        keyboard?.show()
+    }
+
+    Box(Modifier.fillMaxSize().background(Ink)) {
+        LiveField(Acid, Modifier.fillMaxSize().graphicsLayer { alpha = .32f })
+        Column(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
+        ) {
+            OverlayHeader("IDENTITY", "NO SIGNUP // PUBLIC ALIAS", onClose)
+            Spacer(Modifier.height(28.dp))
+
+            StatusPill(if (ui.handleAfterFirstWin) "THE SCREEN IS YOURS" else "GLOBAL IDENTITY", Acid)
+            Spacer(Modifier.height(14.dp))
+            Text(
+                if (ui.handleAfterFirstWin) "YOU'RE LIVE.\nWHO TOOK IT?" else "WHAT SHOULD\nTHE WORLD CALL YOU?",
+                color = Paper,
+                fontWeight = FontWeight.Black,
+                fontSize = 45.sp,
+                lineHeight = 42.sp,
+                letterSpacing = (-1.7).sp,
+            )
+            Text(
+                if (ui.handleAfterFirstWin) "Your words are on the only screen. Give everyone a name to chase."
+                else "Choose a memorable alias for takeovers, rivalries and the Hall.",
+                color = Muted,
+                fontFamily = mono,
+                fontSize = 10.sp,
+                lineHeight = 15.sp,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+
+            ui.receipt?.message?.takeIf { ui.handleAfterFirstWin }?.let { message ->
+                Spacer(Modifier.height(18.dp))
+                Surface(
+                    color = Acid.copy(alpha = .09f),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, Acid.copy(alpha = .28f)),
+                ) {
+                    Text("\"$message\"", color = Acid, fontWeight = FontWeight.Black, fontSize = 15.sp, lineHeight = 19.sp, modifier = Modifier.fillMaxWidth().padding(15.dp))
+                }
+            }
+
+            Spacer(Modifier.height(22.dp))
+            Text("YOUR HANDLE", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.sp)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(86.dp)
+                    .clip(RoundedCornerShape(21.dp))
+                    .background(InkRaised)
+                    .border(1.dp, if (ui.handleError == null) Acid.copy(alpha = .52f) else Orange, RoundedCornerShape(21.dp))
+                    .padding(horizontal = 17.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("@", color = Acid, fontWeight = FontWeight.Black, fontSize = 29.sp)
+                Box(Modifier.weight(1f).padding(start = 2.dp)) {
+                    if (ui.handleText.isEmpty()) {
+                        Text("BOWEI", color = Muted.copy(alpha = .45f), fontWeight = FontWeight.Black, fontSize = 29.sp)
+                    }
+                    BasicTextField(
+                        value = ui.handleText,
+                        onValueChange = onTextChanged,
+                        textStyle = TextStyle(color = Paper, fontWeight = FontWeight.Black, fontSize = 29.sp),
+                        singleLine = true,
+                        cursorBrush = Brush.verticalGradient(listOf(Acid, Acid)),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+                    )
+                }
+                Text(remaining.toString(), color = if (remaining < 0) Orange else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+            }
+
+            ui.handleError?.let {
+                Spacer(Modifier.height(10.dp))
+                ErrorStrip(it)
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(17.dp))
+                    .background(Ice.copy(alpha = .07f))
+                    .border(1.dp, Ice.copy(alpha = .2f), RoundedCornerShape(17.dp))
+                    .padding(15.dp),
+            ) {
+                Text("HANDLE ONLY. NEVER YOUR LEGAL NAME.", color = Ice, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
+                Text("No name or email is public. You still have a private account ID and standard server logs, and abuse gets banned.", color = Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = onSubmit,
+                enabled = valid && !ui.handleSaving,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Acid,
+                    contentColor = Ink,
+                    disabledContainerColor = Color.White.copy(alpha = .08f),
+                    disabledContentColor = Muted,
+                ),
+                shape = RoundedCornerShape(14.dp),
+            ) {
+                Text(
+                    when {
+                        ui.handleSaving -> "CLAIMING @$candidate..."
+                        valid -> "MAKE @$candidate LIVE  ->"
+                        else -> "CHOOSE YOUR HANDLE"
+                    },
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.sp,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth().clickable(enabled = !ui.handleSaving, onClick = onKeepAnonymous),
+                color = Color.Transparent,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = .12f)),
+            ) {
+                Text(
+                    if (ui.handleAfterFirstWin) "NOT NOW - KEEP $currentAlias" else "CANCEL - KEEP $currentAlias",
+                    color = Muted,
+                    fontFamily = mono,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center,
+                    fontSize = 9.sp,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+            Spacer(Modifier.height(15.dp))
+            Text("3-18 CHARACTERS  //  LETTERS, NUMBERS, UNDERSCORES", color = Muted, fontFamily = mono, fontSize = 7.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        }
     }
 }
 
