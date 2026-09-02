@@ -1,6 +1,7 @@
 package com.oneglobal.billboard.data
 
 import android.content.Context
+import android.util.Log
 import com.oneglobal.billboard.BuildConfig
 import com.oneglobal.billboard.model.ChallengePhase
 import com.oneglobal.billboard.model.ChallengeResult
@@ -35,6 +36,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -141,7 +143,10 @@ class CloudOneRepository(context: Context) : OneRepository {
             } else {
                 _events.emit(OneEvent.MessageRejected("Message queued for human safety review."))
             }
-        }.onFailure { _events.emit(OneEvent.MessageRejected(it.userMessage())) }
+        }.onFailure { error ->
+            Log.e(LOG_TAG, "submit_message failed", error)
+            _events.emit(OneEvent.MessageRejected(error.userMessage()))
+        }
     }
 
     override suspend fun grantAdReward() {
@@ -256,20 +261,21 @@ class CloudOneRepository(context: Context) : OneRepository {
         return session
     }
 
-    private suspend fun rpc(name: String, body: JSONObject, authenticated: Boolean, retry: Boolean = true): JSONObject {
-        val token = if (authenticated) ensureSession().accessToken else BuildConfig.SUPABASE_ANON_KEY
-        val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/rest/v1/rpc/$name", "POST", token)
-        connection.outputStream.use { it.write(body.toString().toByteArray()) }
-        val payload = connection.readJson()
-        if (connection.responseCode == 401 && authenticated && retry) {
-            refreshSession()
-            return rpc(name, body, authenticated, retry = false)
+    private suspend fun rpc(name: String, body: JSONObject, authenticated: Boolean, retry: Boolean = true): JSONObject =
+        withContext(Dispatchers.IO) {
+            val token = if (authenticated) ensureSession().accessToken else BuildConfig.SUPABASE_ANON_KEY
+            val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/rest/v1/rpc/$name", "POST", token)
+            connection.outputStream.use { it.write(body.toString().toByteArray()) }
+            val payload = connection.readJson()
+            if (connection.responseCode == 401 && authenticated && retry) {
+                refreshSession()
+                return@withContext rpc(name, body, authenticated, retry = false)
+            }
+            if (connection.responseCode !in 200..299) {
+                throw ApiException(connection.responseCode, payload.optString("message", payload.optString("hint", "ONE request failed.")))
+            }
+            payload
         }
-        if (connection.responseCode !in 200..299) {
-            throw ApiException(connection.responseCode, payload.optString("message", payload.optString("hint", "ONE request failed.")))
-        }
-        return payload
-    }
 
     private fun open(url: String, method: String, token: String?): HttpURLConnection =
         (URL(url).openConnection() as HttpURLConnection).apply {
@@ -411,6 +417,8 @@ class CloudOneRepository(context: Context) : OneRepository {
     private class ApiException(status: Int, message: String) : Exception("$message [$status]")
 
     companion object {
+        private const val LOG_TAG = "ONE_NETWORK"
+
         fun isConfigured(): Boolean = BuildConfig.SUPABASE_URL.startsWith("https://") && BuildConfig.SUPABASE_ANON_KEY.isNotBlank()
 
         private fun fallbackUser(id: String) = OneOwner(id, "@YOU", "EARTH", "XX", false, "YO")
