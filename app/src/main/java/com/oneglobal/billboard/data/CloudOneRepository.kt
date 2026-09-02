@@ -170,6 +170,33 @@ class CloudOneRepository(context: Context) : OneRepository {
         }
     }
 
+    override suspend fun blockCurrentOwner() {
+        runCatching {
+            rpc("block_current_owner", JSONObject(), authenticated = true)
+            refreshWorld()
+            _events.emit(OneEvent.Error("Blocked. Their content is now hidden from you."))
+        }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
+    }
+
+    override suspend fun unblockAll() {
+        runCatching {
+            val result = rpc("unblock_all", JSONObject(), authenticated = true)
+            refreshWorld()
+            _events.emit(OneEvent.Error("${result.optInt("unblocked")} blocked account(s) restored."))
+        }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
+    }
+
+    override suspend fun deleteAccount() {
+        runCatching {
+            rpc("delete_my_account", JSONObject(), authenticated = true)
+            preferences.edit().clear().commit()
+            ensureSession()
+            rpc("ensure_profile", JSONObject(), authenticated = true)
+            refreshWorld()
+            _events.emit(OneEvent.AccountDeleted)
+        }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
+    }
+
     override suspend fun react(reaction: String) {
         runCatching {
             rpc("react_to_one", JSONObject().put("p_reaction", reaction), authenticated = true)
@@ -367,6 +394,8 @@ class CloudOneRepository(context: Context) : OneRepository {
             reactions = json.optJSONArray("reactions").objects().map { item ->
                 CrowdReaction(item.optString("reaction"), item.optString("handle"), item.optLong("created_at_ms"))
             },
+            currentContentBlocked = json.optBoolean("current_content_blocked"),
+            blockedCount = json.optInt("blocked_count"),
         )
     }
 
@@ -404,6 +433,8 @@ class CloudOneRepository(context: Context) : OneRepository {
             message?.contains("HANDLE_RESERVED") == true -> "That handle is protected. Choose an original alias."
             message?.contains("HANDLE_ALREADY_TAKEN") == true -> "That handle already belongs to someone."
             message?.contains("HANDLE_MUST_BE_3_TO_18_CHARACTERS") == true -> "Use 3 to 18 characters."
+            message?.contains("CANNOT_BLOCK_YOURSELF") == true -> "You cannot block your own live reign."
+            message?.contains("CANNOT_BLOCK_ONE") == true -> "The system screen cannot be blocked."
             else -> message ?: "ONE request failed."
         }
         else -> "Cannot reach ONE. Check your connection and backend configuration."

@@ -89,6 +89,13 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                     is OneEvent.CreditsGranted -> _ui.update {
                         it.copy(toast = "+${event.amount} CREDITS // ${event.source}")
                     }
+                    OneEvent.AccountDeleted -> {
+                        profilePreferences.edit().clear().apply()
+                        _ui.value = OneUiState(
+                            tab = MainTab.YOU,
+                            toast = "ACCOUNT DELETED // FRESH ANONYMOUS IDENTITY CREATED",
+                        )
+                    }
                     is OneEvent.Error -> _ui.update { it.copy(toast = event.message) }
                 }
             }
@@ -293,6 +300,28 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     fun report(reason: String) {
         repository.reportCurrentMessage(reason)
         _ui.update { it.copy(overlay = Overlay.NONE) }
+    }
+
+    fun blockCurrentOwner() {
+        _ui.update { it.copy(overlay = Overlay.NONE) }
+        viewModelScope.launch { repository.blockCurrentOwner() }
+    }
+
+    fun unblockAll() {
+        viewModelScope.launch { repository.unblockAll() }
+    }
+
+    fun openDeleteAccount() {
+        _ui.update { it.copy(overlay = Overlay.DELETE_ACCOUNT) }
+    }
+
+    fun deleteAccount() {
+        if (_ui.value.accountDeleting) return
+        _ui.update { it.copy(accountDeleting = true) }
+        viewModelScope.launch {
+            repository.deleteAccount()
+            _ui.update { it.copy(accountDeleting = false) }
+        }
     }
 
     fun enablePush(onRequestPermission: () -> Unit) {

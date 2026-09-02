@@ -24,8 +24,8 @@ android {
         applicationId = "com.tomribowei.one"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.1"
+        versionCode = 4
+        versionName = "0.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -34,7 +34,7 @@ android {
         val oneSignalId = onePublicValue("ONESIGNAL_APP_ID")
         val supabaseUrl = onePublicValue("SUPABASE_URL")
         val supabaseAnonKey = onePublicValue("SUPABASE_ANON_KEY")
-        val oneWebUrl = onePublicValue("ONE_WEB_URL", "https://ownone.app")
+        val oneWebUrl = onePublicValue("ONE_WEB_URL", "https://one-global-screen.no1tomcodes.chatgpt.site")
         buildConfigField("String", "REVENUECAT_API_KEY", "\"$revenueCatKey\"")
         buildConfigField("String", "ONESIGNAL_APP_ID", "\"$oneSignalId\"")
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")

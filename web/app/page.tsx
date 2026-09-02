@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Clock3, Eye, Radio, Share2, ShieldCheck, Swords, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -93,7 +94,7 @@ async function anonymousToken(forceRefresh = false): Promise<string | undefined>
     }
     return undefined;
   }
-  const payload = await response.json();
+  const payload = await response.json() as Partial<BrowserSession> & { expires_in?: number };
   const session: BrowserSession = {
     access_token: String(payload.access_token ?? ''),
     refresh_token: String(payload.refresh_token ?? cached?.refresh_token ?? ''),
@@ -120,7 +121,7 @@ function compact(value: number) {
 export default function Home() {
   const [state, setState] = useState<OneState | null>(null);
   const [status, setStatus] = useState<'connecting' | 'live' | 'unconfigured' | 'offline'>('connecting');
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
 
   const load = useCallback(async (token?: string) => {
     try {
@@ -179,7 +180,7 @@ export default function Home() {
     <main className="one-shell" style={{ '--accent': accent } as React.CSSProperties}>
       <div className="grid-glow" aria-hidden="true" />
       <header className="topbar">
-        <a href="/" className="brand" aria-label="ONE home"><strong>1</strong><span>ONE</span></a>
+        <Link href="/" className="brand" aria-label="ONE home"><strong>1</strong><span>ONE</span></Link>
         <div className={`live-pill ${status}`}><i /><span>{status === 'live' ? 'LIVE WORLD STATE' : status.replace('_', ' ')}</span></div>
         <Button variant="outline" className="share-button" onClick={() => void share()}><Share2 /> Share reign</Button>
       </header>
@@ -233,7 +234,11 @@ export default function Home() {
         </section>
       )}
 
-      <footer><span>ONE / PUBLIC SPECTATOR</span><span>EVERY NUMBER ON THIS PAGE COMES FROM THE LIVE LEDGER.</span></footer>
+      <footer>
+        <span>ONE / PUBLIC SPECTATOR</span>
+        <nav aria-label="Legal"><Link href="/privacy">PRIVACY</Link><Link href="/delete-account">DELETE ACCOUNT</Link></nav>
+        <span>EVERY NUMBER ON THIS PAGE COMES FROM THE LIVE LEDGER.</span>
+      </footer>
     </main>
   );
 }

@@ -124,6 +124,8 @@ fun OneApp(
     onShareReceipt: (ReignReceipt) -> Unit,
     onShareONE: () -> Unit,
     onIdentifyUser: (String) -> Unit,
+    onOpenPrivacy: () -> Unit,
+    onOpenDeletionHelp: () -> Unit,
 ) {
     val world by viewModel.world.collectAsStateWithLifecycle()
     val ui by viewModel.ui.collectAsStateWithLifecycle()
@@ -190,6 +192,9 @@ fun OneApp(
                     onEnablePush = { viewModel.enablePush(onRequestPush) },
                     onShareONE = onShareONE,
                     onEditHandle = viewModel::openHandleEditor,
+                    onOpenPrivacy = onOpenPrivacy,
+                    onUnblockAll = viewModel::unblockAll,
+                    onDeleteAccount = viewModel::openDeleteAccount,
                 )
             }
         }
@@ -278,8 +283,18 @@ fun OneApp(
                 )
                 Overlay.REPORT -> ReportOverlay(
                     owner = world.reign.owner.handle,
+                    canBlock = world.reign.owner.id != world.currentUserId &&
+                        world.reign.owner.id != "00000000-0000-0000-0000-000000000001" &&
+                        !world.currentContentBlocked,
                     onClose = viewModel::closeOverlay,
                     onReport = viewModel::report,
+                    onBlock = viewModel::blockCurrentOwner,
+                )
+                Overlay.DELETE_ACCOUNT -> DeleteAccountOverlay(
+                    deleting = ui.accountDeleting,
+                    onClose = viewModel::closeOverlay,
+                    onDelete = viewModel::deleteAccount,
+                    onHelp = onOpenDeletionHelp,
                 )
             }
         }
@@ -643,6 +658,9 @@ private fun YouScreen(
     onEnablePush: () -> Unit,
     onShareONE: () -> Unit,
     onEditHandle: () -> Unit,
+    onOpenPrivacy: () -> Unit,
+    onUnblockAll: () -> Unit,
+    onDeleteAccount: () -> Unit,
 ) {
     val user = world.currentUser
     val handle = user?.handle ?: if (world.demoMode) "@BOWEI" else "@CONNECTING"
@@ -706,6 +724,32 @@ private fun YouScreen(
             badge = "SHARE",
             accent = Ice,
             onClick = onShareONE,
+        )
+        Spacer(Modifier.height(10.dp))
+        SettingsCard(
+            title = "PRIVACY & DATA",
+            detail = "Read exactly what ONE collects, publishes and retains.",
+            badge = "OPEN",
+            accent = Ice,
+            onClick = onOpenPrivacy,
+        )
+        if (world.blockedCount > 0) {
+            Spacer(Modifier.height(10.dp))
+            SettingsCard(
+                title = "BLOCKED ACCOUNTS",
+                detail = "${world.blockedCount} account(s) hidden from your live screen, Hall and activity.",
+                badge = "CLEAR",
+                accent = Orange,
+                onClick = onUnblockAll,
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        SettingsCard(
+            title = "DELETE ACCOUNT",
+            detail = "Permanently remove this anonymous identity, messages and activity.",
+            badge = "DELETE",
+            accent = Orange,
+            onClick = onDeleteAccount,
         )
         Spacer(Modifier.height(18.dp))
         Text(if (world.demoMode) "LOCAL DEMO MODE" else if (world.connected) "GLOBAL LEDGER CONNECTED" else "GLOBAL LEDGER OFFLINE", color = if (world.connected && !world.demoMode) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.2.sp)
@@ -1134,7 +1178,13 @@ private fun VaultOverlay(
 }
 
 @Composable
-private fun ReportOverlay(owner: String, onClose: () -> Unit, onReport: (String) -> Unit) {
+private fun ReportOverlay(
+    owner: String,
+    canBlock: Boolean,
+    onClose: () -> Unit,
+    onReport: (String) -> Unit,
+    onBlock: () -> Unit,
+) {
     Column(
         Modifier
             .fillMaxSize()
@@ -1146,7 +1196,7 @@ private fun ReportOverlay(owner: String, onClose: () -> Unit, onReport: (String)
         OverlayHeader("SAFETY", "PUBLIC UGC CONTROL", onClose)
         Spacer(Modifier.height(30.dp))
         Text("REPORT THE\nLIVE MESSAGE.", color = Paper, fontWeight = FontWeight.Black, fontSize = 43.sp, lineHeight = 40.sp)
-        Text("The message is hidden for you immediately. Urgent reports trigger the global moderation queue.", color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 12.dp, bottom = 22.dp))
+        Text("Reports enter the global moderation queue. Blocking immediately hides this person and their future content from you.", color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 12.dp, bottom = 22.dp))
         listOf("HATE OR HARASSMENT", "THREAT OR VIOLENCE", "PERSONAL INFORMATION", "SCAM OR IMPERSONATION", "OTHER").forEach { reason ->
             Surface(modifier = Modifier.fillMaxWidth().padding(bottom = 9.dp).clickable { onReport(reason) }, color = InkRaised, shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .07f))) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -1156,11 +1206,66 @@ private fun ReportOverlay(owner: String, onClose: () -> Unit, onReport: (String)
             }
         }
         Spacer(Modifier.height(10.dp))
-        Surface(modifier = Modifier.fillMaxWidth().clickable { onReport("BLOCK $owner") }, color = Orange.copy(alpha = .12f), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, Orange.copy(alpha = .4f))) {
-            Text("BLOCK $owner", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(16.dp))
+        if (canBlock) {
+            Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onBlock), color = Orange.copy(alpha = .12f), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, Orange.copy(alpha = .4f))) {
+                Text("BLOCK $owner", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(16.dp))
+            }
         }
         Spacer(Modifier.weight(1f))
-        Text("Safety contact: safety@ownone.app", color = Muted, fontFamily = mono, fontSize = 8.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+        Text("Safety contact: oneglobalscreen@gmail.com", color = Muted, fontFamily = mono, fontSize = 8.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+    }
+}
+
+@Composable
+private fun DeleteAccountOverlay(
+    deleting: Boolean,
+    onClose: () -> Unit,
+    onDelete: () -> Unit,
+    onHelp: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Ink)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+    ) {
+        OverlayHeader("PRIVACY", "IRREVERSIBLE ACTION", onClose)
+        Spacer(Modifier.height(30.dp))
+        Text("DELETE YOUR\nONE IDENTITY.", color = Paper, fontWeight = FontWeight.Black, fontSize = 43.sp, lineHeight = 40.sp)
+        Text(
+            "This permanently deletes your anonymous account, handle, message library, reactions, reports, tickets and device session. Past reigns remain only as anonymised @DELETED ledger entries so the global record cannot be rewritten.",
+            color = Muted,
+            fontFamily = mono,
+            fontSize = 10.sp,
+            lineHeight = 16.sp,
+            modifier = Modifier.padding(top = 14.dp),
+        )
+        Spacer(Modifier.height(24.dp))
+        Surface(color = Orange.copy(alpha = .1f), shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, Orange.copy(alpha = .38f))) {
+            Column(Modifier.padding(18.dp)) {
+                Text("NO UNDO. NO RECOVERY.", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp)
+                Text("ONE will create a completely new anonymous identity after deletion so the app can reopen safely.", color = Paper, fontFamily = mono, fontSize = 9.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 8.dp))
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onDelete,
+            enabled = !deleting,
+            modifier = Modifier.fillMaxWidth().height(58.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Orange, contentColor = Ink, disabledContainerColor = Orange.copy(alpha = .35f)),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Text(if (deleting) "DELETING SECURELY..." else "PERMANENTLY DELETE ACCOUNT", fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp)
+        }
+        Spacer(Modifier.height(12.dp))
+        Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onHelp), color = InkRaised, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .08f))) {
+            Text("OPEN DELETION HELP", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(16.dp))
+        }
+        Spacer(Modifier.height(18.dp))
+        Text("Questions: oneglobalscreen@gmail.com", color = Muted, fontFamily = mono, fontSize = 8.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
     }
 }
 

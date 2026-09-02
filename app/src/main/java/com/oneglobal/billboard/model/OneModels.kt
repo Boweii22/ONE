@@ -15,6 +15,7 @@ enum class Overlay {
     COMPOSE,
     VAULT,
     REPORT,
+    DELETE_ACCOUNT,
 }
 
 enum class MessageStatus {
@@ -133,6 +134,8 @@ data class WorldState(
     val takeoversToday: Int = 0,
     val activity: List<TakeoverActivity> = emptyList(),
     val reactions: List<CrowdReaction> = emptyList(),
+    val currentContentBlocked: Boolean = false,
+    val blockedCount: Int = 0,
 )
 
 data class OneUiState(
@@ -154,6 +157,7 @@ data class OneUiState(
     val adPlaying: Boolean = false,
     val pushEnabled: Boolean = false,
     val takeoverPulse: Int = 0,
+    val accountDeleting: Boolean = false,
 )
 
 sealed interface OneEvent {
@@ -164,6 +168,7 @@ sealed interface OneEvent {
     data class HandleUpdated(val handle: String) : OneEvent
     data class HandleRejected(val reason: String) : OneEvent
     data class CreditsGranted(val amount: Int, val source: String) : OneEvent
+    data object AccountDeleted : OneEvent
     data class Error(val message: String) : OneEvent
 }
 

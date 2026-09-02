@@ -322,7 +322,40 @@ class DemoOneRepository : OneRepository {
     }
 
     override fun reportCurrentMessage(reason: String) {
-        _events.tryEmit(OneEvent.Error("Report received: $reason. The message is hidden for you."))
+        _events.tryEmit(OneEvent.Error("Report received: $reason."))
+    }
+
+    override suspend fun blockCurrentOwner() {
+        _world.update { current ->
+            current.copy(
+                reign = current.reign.copy(
+                    owner = current.reign.owner.copy(handle = "@BLOCKED", city = "HIDDEN", countryCode = "XX", initials = "--"),
+                    message = current.reign.message.copy(text = "CONTENT BLOCKED."),
+                ),
+                currentContentBlocked = true,
+                blockedCount = current.blockedCount + 1,
+            )
+        }
+        _events.emit(OneEvent.Error("Blocked. Their content is now hidden from you."))
+    }
+
+    override suspend fun unblockAll() {
+        _world.update { it.copy(currentContentBlocked = false, blockedCount = 0) }
+        _events.emit(OneEvent.Error("Blocked accounts restored."))
+    }
+
+    override suspend fun deleteAccount() {
+        _world.update { current ->
+            current.copy(
+                currentUserId = "user_fresh",
+                currentUser = OneOwner("user_fresh", "@PLAYER_FRESH", "EARTH", "XX", false, "PL"),
+                credits = 3,
+                messages = emptyList(),
+                blockedCount = 0,
+                currentContentBlocked = false,
+            )
+        }
+        _events.emit(OneEvent.AccountDeleted)
     }
 
     override suspend fun react(reaction: String) {

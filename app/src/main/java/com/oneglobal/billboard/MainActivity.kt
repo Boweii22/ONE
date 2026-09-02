@@ -2,6 +2,7 @@ package com.oneglobal.billboard
 
 import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -46,6 +47,8 @@ class MainActivity : ComponentActivity() {
                     onShareReceipt = ::shareReceipt,
                     onShareONE = ::shareONE,
                     onIdentifyUser = ::identifyUser,
+                    onOpenPrivacy = { openUrl("${BuildConfig.ONE_WEB_URL}/privacy") },
+                    onOpenDeletionHelp = { openUrl("${BuildConfig.ONE_WEB_URL}/delete-account") },
                 )
             }
         }
@@ -141,5 +144,9 @@ class MainActivity : ComponentActivity() {
             putExtra(Intent.EXTRA_TEXT, text)
         }
         startActivity(Intent.createChooser(intent, title))
+    }
+
+    private fun openUrl(url: String) {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
 }
