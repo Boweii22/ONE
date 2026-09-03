@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Clock3, Eye, Radio, Share2, ShieldCheck, Swords, Users } from 'lucide-react';
+import { ArrowRight, Check, Clock3, Eye, Radio, Share2, ShieldCheck, Swords, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type Activity = {
@@ -63,6 +63,8 @@ type BrowserSession = {
   expires_at: number;
 };
 
+type TesterForm = { email: string; name: string; device: string };
+
 async function anonymousToken(forceRefresh = false): Promise<string | undefined> {
   if (!SUPABASE_URL || !SUPABASE_KEY) return undefined;
   const raw = localStorage.getItem('one_web_session');
@@ -122,6 +124,8 @@ export default function Home() {
   const [state, setState] = useState<OneState | null>(null);
   const [status, setStatus] = useState<'connecting' | 'live' | 'unconfigured' | 'offline'>('connecting');
   const [now, setNow] = useState(0);
+  const [testerForm, setTesterForm] = useState<TesterForm>({ email: '', name: '', device: 'Android phone' });
+  const [testerStatus, setTesterStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   const load = useCallback(async (token?: string) => {
     try {
@@ -174,6 +178,22 @@ export default function Home() {
       : 'Watch ONE — the only live screen.';
     if (navigator.share) await navigator.share({ title: 'ONE', text, url: location.href });
     else await navigator.clipboard.writeText(`${text}\n${location.href}`);
+  };
+
+  const submitTesterInterest = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!SUPABASE_URL || !SUPABASE_KEY) return setTesterStatus('error');
+    setTesterStatus('sending');
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/tester_interest`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_KEY, authorization: `Bearer ${SUPABASE_KEY}`, 'content-type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ email: testerForm.email.trim().toLowerCase(), name: testerForm.name.trim() || null, device: testerForm.device, source: 'one_public_spectator' }),
+      });
+      if (!response.ok) throw new Error('tester_interest_failed');
+      setTesterStatus('sent');
+      setTesterForm({ email: '', name: '', device: 'Android phone' });
+    } catch { setTesterStatus('error'); }
   };
 
   return (
@@ -233,6 +253,33 @@ export default function Home() {
           <small>{status === 'unconfigured' ? 'Set the Supabase public URL and key to begin the founding reign.' : 'No simulated audience. No fake numbers.'}</small>
         </section>
       )}
+
+      <section className="tester-section" aria-labelledby="tester-title">
+        <div className="tester-copy">
+          <span className="section-kicker">ANDROID CLOSED TEST</span>
+          <h1 id="tester-title">DON&apos;T JUST WATCH THE SCREEN.<br /><em>TRY TO TAKE IT.</em></h1>
+          <p>ONE is a live game where one message owns the internet&apos;s only screen. Watch on the web. Challenge for it in the Android app.</p>
+          <ol><li><b>01</b><span>Join the Android closed test.</span></li><li><b>02</b><span>Open ONE, make a move, and report what breaks.</span></li><li><b>03</b><span>Help decide what the global screen becomes.</span></li></ol>
+        </div>
+        <div className="tester-card">
+          {testerStatus === 'sent' ? (
+            <div className="tester-success" role="status"><Check /><span>YOU&apos;RE ON THE LIST.</span><p>We&apos;ll email you when a tester place opens. Use this same Google account on your Android phone.</p><button type="button" onClick={() => setTesterStatus('idle')}>ADD ANOTHER EMAIL <ArrowRight /></button></div>
+          ) : (
+            <form onSubmit={submitTesterInterest}>
+              <div className="form-head"><span>TEST ONE BEFORE LAUNCH</span><b>LIMITED PLACES</b></div>
+              <label htmlFor="tester-email">GOOGLE PLAY EMAIL <strong>*</strong></label>
+              <input id="tester-email" type="email" autoComplete="email" required placeholder="you@gmail.com" value={testerForm.email} onChange={(event) => setTesterForm((current) => ({ ...current, email: event.target.value }))} />
+              <label htmlFor="tester-name">NAME <small>(OPTIONAL)</small></label>
+              <input id="tester-name" type="text" autoComplete="name" placeholder="How should we address you?" value={testerForm.name} onChange={(event) => setTesterForm((current) => ({ ...current, name: event.target.value }))} />
+              <label htmlFor="tester-device">DEVICE</label>
+              <select id="tester-device" value={testerForm.device} onChange={(event) => setTesterForm((current) => ({ ...current, device: event.target.value }))}><option>Android phone</option><option>Android tablet</option><option>Chromebook</option><option>Google Play Games on PC</option></select>
+              <Button type="submit" className="tester-submit" disabled={testerStatus === 'sending'}>{testerStatus === 'sending' ? 'SAVING YOUR PLACE…' : <>REQUEST TEST ACCESS <ArrowRight /></>}</Button>
+              {testerStatus === 'error' && <p className="form-error" role="alert">Couldn&apos;t save that yet. Please email <a href="mailto:oneglobalscreen@gmail.com">oneglobalscreen@gmail.com</a>.</p>}
+              <p className="form-note">By requesting access, you agree that ONE may contact you about closed testing. No marketing list, no spam.</p>
+            </form>
+          )}
+        </div>
+      </section>
 
       <footer>
         <span>ONE / PUBLIC SPECTATOR</span>
