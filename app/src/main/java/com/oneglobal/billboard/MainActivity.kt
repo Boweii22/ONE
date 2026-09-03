@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
         result: (success: Boolean, message: String, grantedCredits: Int) -> Unit,
     ) {
         if (BuildConfig.REVENUECAT_API_KEY.isBlank()) {
-            result(false, "Demo mode: add your RevenueCat public SDK key to activate live credit packs.", 0)
+            result(false, "Purchases are not configured in this build yet.", 0)
             return
         }
         Purchases.sharedInstance.getOfferings(object : ReceiveOfferingsCallback {

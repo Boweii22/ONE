@@ -193,6 +193,7 @@ fun OneApp(
                     onShareONE = onShareONE,
                     onEditHandle = viewModel::openHandleEditor,
                     onOpenPrivacy = onOpenPrivacy,
+                    onFeedback = viewModel::openFeedback,
                     onUnblockAll = viewModel::unblockAll,
                     onDeleteAccount = viewModel::openDeleteAccount,
                 )
@@ -289,6 +290,13 @@ fun OneApp(
                     onClose = viewModel::closeOverlay,
                     onReport = viewModel::report,
                     onBlock = viewModel::blockCurrentOwner,
+                )
+                Overlay.FEEDBACK -> FeedbackOverlay(
+                    ui = ui,
+                    onClose = viewModel::closeOverlay,
+                    onCategorySelected = viewModel::selectFeedbackCategory,
+                    onTextChanged = viewModel::updateFeedbackText,
+                    onSubmit = viewModel::submitFeedback,
                 )
                 Overlay.DELETE_ACCOUNT -> DeleteAccountOverlay(
                     deleting = ui.accountDeleting,
@@ -659,6 +667,7 @@ private fun YouScreen(
     onShareONE: () -> Unit,
     onEditHandle: () -> Unit,
     onOpenPrivacy: () -> Unit,
+    onFeedback: () -> Unit,
     onUnblockAll: () -> Unit,
     onDeleteAccount: () -> Unit,
 ) {
@@ -704,7 +713,7 @@ private fun YouScreen(
             badge = when {
                 ui.pushEnabled -> "ON"
                 oneSignalReady -> "ARM"
-                else -> "DEMO"
+                else -> "OFF"
             },
             accent = Orange,
             onClick = onEnablePush,
@@ -713,7 +722,7 @@ private fun YouScreen(
         SettingsCard(
             title = "REVENUECAT REVENGE",
             detail = if (revenueCatReady) "Live ticket packs are connected and server verified." else "Add the public SDK key to activate ticket packs.",
-            badge = if (revenueCatReady) "LIVE" else "DEMO",
+            badge = if (revenueCatReady) "LIVE" else "OFF",
             accent = Acid,
             onClick = onVault,
         )
@@ -732,6 +741,14 @@ private fun YouScreen(
             badge = "OPEN",
             accent = Ice,
             onClick = onOpenPrivacy,
+        )
+        Spacer(Modifier.height(10.dp))
+        SettingsCard(
+            title = "SEND FEEDBACK",
+            detail = "Tell us what worked, broke, confused you, or should exist next. Your note is sent to the ONE team.",
+            badge = "SEND",
+            accent = Acid,
+            onClick = onFeedback,
         )
         if (world.blockedCount > 0) {
             Spacer(Modifier.height(10.dp))
@@ -752,8 +769,8 @@ private fun YouScreen(
             onClick = onDeleteAccount,
         )
         Spacer(Modifier.height(18.dp))
-        Text(if (world.demoMode) "LOCAL DEMO MODE" else if (world.connected) "GLOBAL LEDGER CONNECTED" else "GLOBAL LEDGER OFFLINE", color = if (world.connected && !world.demoMode) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.2.sp)
-        Text(if (world.demoMode) "Add Supabase public configuration to make every phone fight over the same ONE." else "Ownership, cooldowns, tickets, views and race ordering are controlled by the server.", color = Muted, fontFamily = mono, fontSize = 9.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 7.dp))
+        Text(if (world.connected) "GLOBAL LEDGER CONNECTED" else "GLOBAL LEDGER OFFLINE", color = if (world.connected) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.2.sp)
+        Text("Ownership, cooldowns, tickets, views and race ordering are controlled by the server.", color = Muted, fontFamily = mono, fontSize = 9.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 7.dp))
     }
 }
 
@@ -1141,7 +1158,7 @@ private fun VaultOverlay(
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
-        OverlayHeader("ONE VAULT", if (revenueCatReady) "REVENUECAT LIVE" else "SAFE DEMO MODE", onClose)
+        OverlayHeader("ONE VAULT", if (revenueCatReady) "REVENUECAT LIVE" else "PURCHASES NOT CONFIGURED", onClose)
         Spacer(Modifier.height(24.dp))
         Text("${formatNumber(world.credits)}", color = Acid, fontWeight = FontWeight.Black, fontSize = 66.sp, letterSpacing = (-3).sp)
         Text("REVENGE TICKETS", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.5.sp)
@@ -1213,6 +1230,83 @@ private fun ReportOverlay(
         }
         Spacer(Modifier.weight(1f))
         Text("Safety contact: oneglobalscreen@gmail.com", color = Muted, fontFamily = mono, fontSize = 8.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+    }
+}
+
+@Composable
+private fun FeedbackOverlay(
+    ui: OneUiState,
+    onClose: () -> Unit,
+    onCategorySelected: (String) -> Unit,
+    onTextChanged: (String) -> Unit,
+    onSubmit: () -> Unit,
+) {
+    val categories = listOf("BUG", "IDEA", "GAMEPLAY", "OTHER")
+    val remaining = 1_000 - ui.feedbackText.length
+    val canSubmit = ui.feedbackText.trim().length >= 3 && !ui.feedbackSending
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Ink)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+    ) {
+        OverlayHeader("FEEDBACK", "REAL TESTER NOTES", onClose)
+        Spacer(Modifier.height(28.dp))
+        Text("MAKE ONE\nBETTER.", color = Paper, fontWeight = FontWeight.Black, fontSize = 43.sp, lineHeight = 40.sp, letterSpacing = (-1.6).sp)
+        Text("Your note is attached to your anonymous ONE account so we can investigate without collecting your name or email.", color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 12.dp))
+        Spacer(Modifier.height(22.dp))
+        Text("WHAT TYPE OF NOTE?", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.sp)
+        Spacer(Modifier.height(9.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            categories.forEach { category ->
+                val selected = ui.feedbackCategory == category
+                Surface(
+                    modifier = Modifier.clickable { onCategorySelected(category) },
+                    color = if (selected) Acid else InkRaised,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, if (selected) Acid else Color.White.copy(alpha = .1f)),
+                ) {
+                    Text(category, color = if (selected) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp))
+                }
+            }
+        }
+        Spacer(Modifier.height(17.dp))
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(270.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Brush.linearGradient(listOf(Color(0xFF151A08), Color(0xFF090A06))))
+                .border(1.dp, Acid.copy(alpha = .4f), RoundedCornerShape(24.dp))
+                .padding(18.dp),
+        ) {
+            if (ui.feedbackText.isEmpty()) {
+                Text("WHAT HAPPENED?\nWHAT SHOULD CHANGE?", color = Muted.copy(alpha = .55f), fontWeight = FontWeight.Black, fontSize = 22.sp, lineHeight = 26.sp)
+            }
+            BasicTextField(
+                value = ui.feedbackText,
+                onValueChange = onTextChanged,
+                textStyle = TextStyle(color = Paper, fontWeight = FontWeight.Medium, fontSize = 18.sp, lineHeight = 23.sp),
+                modifier = Modifier.fillMaxSize(),
+                cursorBrush = Brush.verticalGradient(listOf(Acid, Acid)),
+            )
+            Text("$remaining", color = if (remaining < 0) Orange else Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 10.sp, modifier = Modifier.align(Alignment.BottomEnd))
+        }
+        Spacer(Modifier.height(18.dp))
+        Button(
+            onClick = onSubmit,
+            enabled = canSubmit,
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink, disabledContainerColor = Color.White.copy(alpha = .08f), disabledContentColor = Muted),
+            shape = RoundedCornerShape(14.dp),
+        ) {
+            Text(if (ui.feedbackSending) "SENDING..." else "SEND TO THE ONE TEAM  ->", fontWeight = FontWeight.Black, fontSize = 12.sp)
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("Please do not include passwords, payment details, or private information.", color = Muted, fontFamily = mono, textAlign = TextAlign.Center, fontSize = 8.sp, lineHeight = 12.sp, modifier = Modifier.fillMaxWidth())
     }
 }
 

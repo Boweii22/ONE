@@ -15,6 +15,7 @@ enum class Overlay {
     COMPOSE,
     VAULT,
     REPORT,
+    FEEDBACK,
     DELETE_ACCOUNT,
 }
 
@@ -158,6 +159,9 @@ data class OneUiState(
     val pushEnabled: Boolean = false,
     val takeoverPulse: Int = 0,
     val accountDeleting: Boolean = false,
+    val feedbackCategory: String = "GENERAL",
+    val feedbackText: String = "",
+    val feedbackSending: Boolean = false,
 )
 
 sealed interface OneEvent {
@@ -168,6 +172,7 @@ sealed interface OneEvent {
     data class HandleUpdated(val handle: String) : OneEvent
     data class HandleRejected(val reason: String) : OneEvent
     data class CreditsGranted(val amount: Int, val source: String) : OneEvent
+    data object FeedbackSubmitted : OneEvent
     data object AccountDeleted : OneEvent
     data class Error(val message: String) : OneEvent
 }

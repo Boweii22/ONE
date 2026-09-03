@@ -403,6 +403,10 @@ class DemoOneRepository : OneRepository {
         _events.emit(OneEvent.HandleUpdated(updated.handle))
     }
 
+    override suspend fun submitFeedback(category: String, text: String) {
+        _events.emit(OneEvent.Error("Feedback requires the live ONE backend."))
+    }
+
     fun close() {
         scope.cancel()
     }

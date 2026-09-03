@@ -226,6 +226,19 @@ class CloudOneRepository(context: Context) : OneRepository {
         }.onFailure { _events.emit(OneEvent.HandleRejected(it.userMessage())) }
     }
 
+    override suspend fun submitFeedback(category: String, text: String) {
+        runCatching {
+            rpc(
+                "submit_feedback",
+                JSONObject().put("p_category", category).put("p_text", text),
+                authenticated = true,
+            )
+            _events.emit(OneEvent.FeedbackSubmitted)
+        }.onFailure { error ->
+            _events.emit(OneEvent.Error(error.userMessage()))
+        }
+    }
+
     private suspend fun refreshWorld() {
         val before = _world.value
         val next = parseWorld(rpc("get_one_state", JSONObject(), authenticated = true))

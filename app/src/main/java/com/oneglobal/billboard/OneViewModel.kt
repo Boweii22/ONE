@@ -89,6 +89,14 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                     is OneEvent.CreditsGranted -> _ui.update {
                         it.copy(toast = "+${event.amount} CREDITS // ${event.source}")
                     }
+                    OneEvent.FeedbackSubmitted -> _ui.update {
+                        it.copy(
+                            overlay = Overlay.NONE,
+                            feedbackText = "",
+                            feedbackSending = false,
+                            toast = "FEEDBACK RECEIVED // THANK YOU",
+                        )
+                    }
                     OneEvent.AccountDeleted -> {
                         profilePreferences.edit().clear().apply()
                         _ui.value = OneUiState(
@@ -300,6 +308,29 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     fun report(reason: String) {
         repository.reportCurrentMessage(reason)
         _ui.update { it.copy(overlay = Overlay.NONE) }
+    }
+
+    fun openFeedback() {
+        _ui.update { it.copy(overlay = Overlay.FEEDBACK, feedbackText = "", feedbackCategory = "GENERAL", feedbackSending = false) }
+    }
+
+    fun updateFeedbackText(text: String) {
+        if (text.length <= 1_000) _ui.update { it.copy(feedbackText = text) }
+    }
+
+    fun selectFeedbackCategory(category: String) {
+        _ui.update { it.copy(feedbackCategory = category) }
+    }
+
+    fun submitFeedback() {
+        val text = _ui.value.feedbackText.trim()
+        if (text.length < 3) {
+            _ui.update { it.copy(toast = "WRITE A LITTLE MORE BEFORE SENDING.") }
+            return
+        }
+        if (_ui.value.feedbackSending) return
+        _ui.update { it.copy(feedbackSending = true) }
+        viewModelScope.launch { repository.submitFeedback(_ui.value.feedbackCategory, text) }
     }
 
     fun blockCurrentOwner() {

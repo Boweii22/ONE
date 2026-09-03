@@ -22,6 +22,7 @@ interface OneRepository {
     suspend fun react(reaction: String)
     suspend fun echoCurrentMessage()
     suspend fun updateHandle(handle: String)
+    suspend fun submitFeedback(category: String, text: String)
     fun start()
     fun stop()
 }
