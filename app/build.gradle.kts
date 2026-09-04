@@ -2,12 +2,18 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
+    id("com.google.gms.google-services")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
 val oneLocalProperties = Properties().apply {
     val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use(::load)
+}
+
+val oneSigningProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
     if (file.exists()) file.inputStream().use(::load)
 }
 
@@ -24,8 +30,8 @@ android {
         applicationId = "com.tomribowei.one"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 16
+        versionName = "1.0.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -42,6 +48,17 @@ android {
         buildConfigField("String", "ONE_WEB_URL", "\"$oneWebUrl\"")
     }
 
+    signingConfigs {
+        create("release") {
+            if (oneSigningProperties.isNotEmpty()) {
+                storeFile = rootProject.file(oneSigningProperties.getProperty("storeFile"))
+                storePassword = oneSigningProperties.getProperty("storePassword")
+                keyAlias = oneSigningProperties.getProperty("keyAlias")
+                keyPassword = oneSigningProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         getByName("release") {
             val url = onePublicValue("SUPABASE_URL")
@@ -49,6 +66,10 @@ android {
             if (!url.startsWith("https://") || key.isBlank()) {
                 throw GradleException("Release builds require a live SUPABASE_URL and SUPABASE_ANON_KEY.")
             }
+            if (oneSigningProperties.isEmpty()) {
+                throw GradleException("Release builds require keystore.properties.")
+            }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

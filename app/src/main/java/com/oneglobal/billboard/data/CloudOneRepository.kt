@@ -51,6 +51,10 @@ class CloudOneRepository(context: Context) : OneRepository {
     private val preferences = appContext.getSharedPreferences("one_cloud_session", Context.MODE_PRIVATE)
     private var pollJob: Job? = null
     private var heartbeatJob: Job? = null
+    private var hallRefreshAt = 0L
+    private var cachedHallToday: List<HallEntry> = emptyList()
+    private var cachedHallAllTime: List<HallEntry> = emptyList()
+    private var hallAllTimeLive = false
 
     private val _world = MutableStateFlow(disconnectedWorld())
     override val world: StateFlow<WorldState> = _world.asStateFlow()
@@ -241,7 +245,25 @@ class CloudOneRepository(context: Context) : OneRepository {
 
     private suspend fun refreshWorld() {
         val before = _world.value
-        val next = parseWorld(rpc("get_one_state", JSONObject(), authenticated = true))
+        var next = parseWorld(rpc("get_one_state", JSONObject(), authenticated = true))
+        val now = System.currentTimeMillis()
+        if (now - hallRefreshAt >= 15_000L) {
+            runCatching {
+                parseHall(rpc("get_hall", JSONObject().put("p_period", "today").put("p_limit", 100), authenticated = true))
+            }.getOrNull()?.let { cachedHallToday = it }
+            runCatching {
+                parseHall(rpc("get_hall", JSONObject().put("p_period", "all_time").put("p_limit", 100), authenticated = true))
+            }.getOrNull()?.let {
+                cachedHallAllTime = it
+                hallAllTimeLive = true
+            }
+            hallRefreshAt = now
+        }
+        next = next.copy(
+            hallToday = cachedHallToday.ifEmpty { next.hall },
+            hallAllTime = cachedHallAllTime.ifEmpty { next.hall },
+            hallAllTimeLive = hallAllTimeLive,
+        )
         _world.value = next
         if (
             before.connected &&
@@ -428,6 +450,24 @@ class CloudOneRepository(context: Context) : OneRepository {
         createdAtMillis = json.optLong("created_at_ms", System.currentTimeMillis()),
         timesDeployed = json.optInt("times_deployed"),
     )
+
+    private fun parseHall(json: JSONObject): List<HallEntry> =
+        json.optJSONArray("entries").objects().mapIndexed { index, item ->
+            HallEntry(
+                rank = item.optInt("rank", index + 1),
+                owner = OneOwner(
+                    id = item.optString("owner_id"),
+                    handle = item.optString("owner", "@ONE"),
+                    city = item.optString("city", "EARTH"),
+                    countryCode = item.optString("country_code", "XX"),
+                    verified = item.optBoolean("verified"),
+                    initials = item.optString("initials", "ON"),
+                ),
+                message = item.optString("message"),
+                reignSeconds = item.optInt("reign_seconds"),
+                verifiedViews = item.optInt("verified_views"),
+            )
+        }
 
     private fun JSONArray?.objects(): List<JSONObject> =
         if (this == null) emptyList() else (0 until length()).map { getJSONObject(it) }

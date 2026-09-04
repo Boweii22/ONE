@@ -5,13 +5,13 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-val Ink = Color(0xFF070708)
-val InkRaised = Color(0xFF111115)
-val Paper = Color(0xFFF4F2EA)
-val Muted = Color(0xFF85858E)
-val Acid = Color(0xFFDFFF00)
+val Ink = Color(0xFF080808)
+val InkRaised = Color(0xFF141414)
+val Paper = Color(0xFFF2F0E8)
+val Muted = Color(0xFF8E8E91)
+val Acid = Color(0xFFD7FF00)
 val Cobalt = Color(0xFF315CFF)
-val Orange = Color(0xFFFF5C35)
+val Orange = Color(0xFFFF4E2B)
 val Magenta = Color(0xFFFF3BBE)
 val Ice = Color(0xFF72E7FF)
 

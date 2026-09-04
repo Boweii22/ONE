@@ -7,7 +7,11 @@ import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -26,8 +30,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -57,16 +63,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -120,7 +129,8 @@ fun OneApp(
     revenueCatReady: Boolean,
     oneSignalReady: Boolean,
     onPurchaseCredits: (Int, (Boolean, String, Int) -> Unit) -> Unit,
-    onRequestPush: () -> Unit,
+    onRestorePurchases: ((Boolean, String) -> Unit) -> Unit,
+    onRequestPush: ((Boolean) -> Unit) -> Unit,
     onShareReceipt: (ReignReceipt) -> Unit,
     onShareONE: () -> Unit,
     onIdentifyUser: (String) -> Unit,
@@ -130,6 +140,17 @@ fun OneApp(
     val world by viewModel.world.collectAsStateWithLifecycle()
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
+    var showSplash by rememberSaveable { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        delay(2_050)
+        showSplash = false
+    }
+
+    if (showSplash) {
+        SplashScreen()
+        return
+    }
 
     BackHandler(ui.overlay != Overlay.NONE) { viewModel.closeOverlay() }
 
@@ -147,6 +168,11 @@ fun OneApp(
             delay(3_200)
             viewModel.dismissToast()
         }
+    }
+
+    if (!ui.onboardingComplete) {
+        OnboardingScreen(onEnter = viewModel::completeOnboarding)
+        return
     }
 
     Box(Modifier.fillMaxSize().background(Ink)) {
@@ -196,6 +222,7 @@ fun OneApp(
                     onFeedback = viewModel::openFeedback,
                     onUnblockAll = viewModel::unblockAll,
                     onDeleteAccount = viewModel::openDeleteAccount,
+                    onHowItWorks = viewModel::openHowItWorks,
                 )
             }
         }
@@ -246,6 +273,7 @@ fun OneApp(
                     onSelectMessage = viewModel::selectMessage,
                     onBegin = viewModel::beginChallenge,
                     onOpenVault = viewModel::openVault,
+                    onInfo = viewModel::openHowItWorks,
                 )
                 Overlay.RECEIPT -> ReceiptOverlay(
                     receipt = ui.receipt,
@@ -269,10 +297,8 @@ fun OneApp(
                 )
                 Overlay.VAULT -> VaultOverlay(
                     world = world,
-                    ui = ui,
                     revenueCatReady = revenueCatReady,
                     onClose = viewModel::closeOverlay,
-                    onWatchAd = viewModel::watchRewardedAd,
                     onPurchase = { amount ->
                         onPurchaseCredits(amount) { success, message, granted ->
                             if (success && granted > 0) viewModel.grantPurchasedCredits(granted)
@@ -280,6 +306,9 @@ fun OneApp(
                                 // The monetisation shell intentionally remains safe in demo mode.
                             }
                         }
+                    },
+                    onRestore = {
+                        onRestorePurchases { _, message -> viewModel.showToast(message) }
                     },
                 )
                 Overlay.REPORT -> ReportOverlay(
@@ -304,8 +333,102 @@ fun OneApp(
                     onDelete = viewModel::deleteAccount,
                     onHelp = onOpenDeletionHelp,
                 )
+                Overlay.HOW_IT_WORKS -> HowItWorksOverlay(onClose = viewModel::closeOverlay)
             }
         }
+    }
+}
+
+@Composable
+private fun SplashScreen() {
+    val transition = rememberInfiniteTransition(label = "one-splash")
+    val spin by transition.animateFloat(0f, 360f, infiniteRepeatable(tween(3_800, easing = LinearEasing)), label = "orbit")
+    val pulse by transition.animateFloat(.94f, 1.06f, infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse")
+    Box(Modifier.fillMaxSize().background(Ink), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            repeat(64) { index ->
+                val x = ((index * 79) % 521) / 521f * size.width
+                val y = ((index * 151) % 547) / 547f * size.height
+                drawCircle(if (index % 9 == 0) Acid.copy(alpha = .22f) else Paper.copy(alpha = .045f), if (index % 9 == 0) 2.2f else 1f, Offset(x, y))
+            }
+            drawCircle(Acid.copy(alpha = .06f), size.minDimension * .34f)
+        }
+        Box(Modifier.size(246.dp).rotate(spin)) {
+            Box(Modifier.size(246.dp).border(1.dp, Acid.copy(alpha = .22f), CircleShape))
+            Box(Modifier.align(Alignment.TopCenter).offset(y = (-4).dp).size(9.dp).clip(CircleShape).background(Acid))
+            Box(Modifier.align(Alignment.BottomCenter).offset(y = 4.dp).size(5.dp).clip(CircleShape).background(Ice))
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.scale(pulse)) {
+            Text("1", color = Acid, fontWeight = FontWeight.Black, fontSize = 154.sp, lineHeight = 136.sp, letterSpacing = (-10).sp)
+            Text("ONE", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 7.sp)
+        }
+        Column(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 34.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("CONNECTING TO THE WORLD", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.5.sp)
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.width(120.dp).height(2.dp).background(Color.White.copy(alpha = .08f))) {
+                Box(Modifier.fillMaxWidth(.72f).fillMaxHeight().background(Acid))
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnboardingScreen(onEnter: () -> Unit) {
+    var page by rememberSaveable { mutableStateOf(0) }
+    val pages = listOf(
+        OnboardingPage("01", "THE INTERNET\nHAS ONE SCREEN.", "One person owns it. Everyone watches. Anyone can take it.", "◉", Acid, "WATCH THE WORLD"),
+        OnboardingPage("02", "DON’T POST.\nTAKE CONTROL.", "Choose one approved message, enter the live race and become the only voice on ONE.", "ϟ", Orange, "TAKE THE SCREEN"),
+        OnboardingPage("03", "MAKE EVERY\nSECOND COUNT.", "Your reign, verified views and place in The Hall are recorded live for everyone.", "♛", Ice, "LEAVE A MARK"),
+    )
+    val item = pages[page]
+    Box(Modifier.fillMaxSize().background(Ink)) {
+        LiveField(item.color, Modifier.fillMaxSize())
+        Canvas(Modifier.fillMaxSize()) {
+            repeat(7) { ring ->
+                drawCircle(item.color.copy(alpha = .035f), size.minDimension * (.18f + ring * .09f), Offset(size.width * .78f, size.height * .22f), style = Stroke(1f))
+            }
+        }
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 22.dp, vertical = 17.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("ONE / FIRST ENTRY", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.sp)
+                Text("${page + 1} / ${pages.size}", color = item.color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp)
+            }
+            Spacer(Modifier.height(24.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                pages.indices.forEach { index ->
+                    Box(Modifier.weight(1f).height(3.dp).background(if (index <= page) item.color else Color.White.copy(alpha = .09f)))
+                }
+            }
+            AnimatedContent(page, transitionSpec = { (fadeIn(tween(280)) + slideInVertically { it / 5 }) togetherWith (fadeOut(tween(180)) + slideOutVertically { -it / 5 }) }, label = "onboarding-page", modifier = Modifier.weight(1f)) {
+                Column(Modifier.fillMaxSize()) {
+                    Spacer(Modifier.weight(.45f))
+                    Box(Modifier.size(132.dp).clip(CircleShape).background(item.color).shadow(28.dp, CircleShape, spotColor = item.color.copy(alpha = .4f)), contentAlignment = Alignment.Center) {
+                        Text(item.icon, color = Ink, fontWeight = FontWeight.Black, fontSize = 54.sp)
+                    }
+                    Spacer(Modifier.height(32.dp))
+                    Text(item.eyebrow, color = item.color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp, letterSpacing = 1.6.sp)
+                    Text(item.title, color = Paper, fontWeight = FontWeight.Black, fontSize = 43.sp, lineHeight = 39.sp, letterSpacing = (-1.8).sp, modifier = Modifier.padding(top = 9.dp))
+                    Text(item.body, color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 15.dp, end = 24.dp))
+                    Spacer(Modifier.weight(.35f))
+                }
+            }
+            Button(onClick = { if (page < pages.lastIndex) page++ else onEnter() }, modifier = Modifier.fillMaxWidth().height(62.dp), colors = ButtonDefaults.buttonColors(containerColor = item.color, contentColor = Ink), shape = RoundedCornerShape(6.dp)) {
+                Text(if (page == pages.lastIndex) "ENTER THE LIVE WORLD  →" else "CONTINUE  →", fontWeight = FontWeight.Black, fontSize = 13.sp)
+            }
+            if (page > 0) Text("BACK", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().clickable { page-- }.padding(13.dp))
+            else Spacer(Modifier.height(34.dp))
+        }
+    }
+}
+
+private data class OnboardingPage(val number: String, val title: String, val body: String, val icon: String, val color: Color, val eyebrow: String)
+
+@Composable
+private fun OnboardingStep(index: String, icon: String, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(index, color = Muted, fontFamily = mono, fontSize = 7.sp)
+        Text(icon, color = Acid, fontWeight = FontWeight.Black, fontSize = 22.sp, modifier = Modifier.padding(vertical = 3.dp))
+        Text(label, color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp, letterSpacing = .7.sp)
     }
 }
 
@@ -333,37 +456,35 @@ private fun LiveScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 92.dp),
+                .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 84.dp),
         ) {
             LiveHeader(world, accent, onShareONE, onReport)
-            Spacer(Modifier.weight(.24f))
+            Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OwnerMark(world.reign.owner.initials, accent)
-                Spacer(Modifier.width(10.dp))
+                OwnerMarkLarge(world.reign.owner.initials, accent)
+                Spacer(Modifier.width(14.dp))
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(world.reign.owner.handle, color = Paper, fontWeight = FontWeight.Black, fontSize = 13.sp)
+                        Text(world.reign.owner.handle, color = Paper, fontWeight = FontWeight.Black, fontSize = 20.sp)
                         if (world.reign.owner.verified) {
                             Spacer(Modifier.width(5.dp))
-                            Text("◆", color = accent, fontSize = 9.sp)
+                            Text("◆", color = accent, fontSize = 10.sp)
                         }
                     }
                     Text(
-                        "OWNS ONE // ${world.reign.owner.city}, ${world.reign.owner.countryCode}",
+                        "${world.reign.owner.city.uppercase()}, ${world.reign.owner.countryCode}",
                         color = Muted,
                         fontFamily = mono,
-                        fontSize = 8.sp,
-                        letterSpacing = .9.sp,
+                        fontSize = 10.sp,
+                        letterSpacing = 1.sp,
                     )
                 }
             }
-            Spacer(Modifier.height(22.dp))
+            Box(Modifier.fillMaxWidth().padding(vertical = 17.dp).height(1.dp).background(Color.White.copy(alpha = .16f)))
             MessageStage(message = world.reign.message.text, accent = accent)
-            Spacer(Modifier.height(22.dp))
-            ViewLedger(world, accent)
-            Spacer(Modifier.height(11.dp))
-            CrowdControls(world, onReact, onEcho)
-            Spacer(Modifier.weight(.34f))
+            Spacer(Modifier.weight(1f))
+            ViewLedger(world, accent, protectedSeconds)
+            Spacer(Modifier.height(12.dp))
             AuctionCard(
                 world = world,
                 accent = accent,
@@ -371,6 +492,8 @@ private fun LiveScreen(
                 isOwner = isOwner,
                 onPrimary = if (isOwner) onShareReign else onChallenge,
             )
+            Spacer(Modifier.height(14.dp))
+            CrowdControls(world, onReact, onEcho)
         }
 
         if (ui.challengePhase == ChallengePhase.WON && ui.overlay == Overlay.CHALLENGE) {
@@ -383,19 +506,14 @@ private fun LiveScreen(
 private fun LiveHeader(world: WorldState, accent: Color, onShare: () -> Unit, onReport: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OneLogo(accent, compact = true)
-            Spacer(Modifier.width(10.dp))
             Box(Modifier.size(7.dp).clip(CircleShape).background(accent))
-            Spacer(Modifier.width(6.dp))
-            Text("LIVE", color = accent, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.2.sp)
+            Spacer(Modifier.width(8.dp))
+            Text("LIVE WORLD STATE", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp, letterSpacing = .7.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(formatNumber(world.liveWatchers), color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 9.sp)
-            Text(" WATCHING", color = Muted, fontFamily = mono, fontSize = 8.sp)
-            Spacer(Modifier.width(13.dp))
-            CircleAction("↗", onShare)
+            CircleAction("◎", onShare)
             Spacer(Modifier.width(7.dp))
-            CircleAction("···", onReport)
+            CircleAction("⋮", onReport)
         }
     }
 }
@@ -403,10 +521,11 @@ private fun LiveHeader(world: WorldState, accent: Color, onShare: () -> Unit, on
 @Composable
 private fun MessageStage(message: String, accent: Color) {
     val size = when {
-        message.length <= 22 -> 52.sp
-        message.length <= 42 -> 44.sp
-        message.length <= 62 -> 38.sp
-        else -> 33.sp
+        message.length <= 22 -> 53.sp
+        message.length <= 42 -> 43.sp
+        message.length <= 62 -> 34.sp
+        message.length <= 90 -> 28.sp
+        else -> 23.sp
     }
     Column {
         Text(
@@ -415,36 +534,44 @@ private fun MessageStage(message: String, accent: Color) {
             fontFamily = display,
             fontWeight = FontWeight.Black,
             fontSize = size,
-            lineHeight = size * .96f,
+            lineHeight = size * .91f,
             letterSpacing = (-1.8).sp,
+            maxLines = 5,
+            overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(15.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(42.dp).height(4.dp).background(accent, CircleShape))
-            Spacer(Modifier.width(9.dp))
-            Text("THE ONLY LIVE MESSAGE", color = accent, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.3.sp)
-        }
     }
 }
 
 @Composable
-private fun ViewLedger(world: WorldState, accent: Color) {
+private fun ViewLedger(world: WorldState, accent: Color, protectedSeconds: Int) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(7.dp))
             .background(Color.Black.copy(alpha = .2f))
-            .border(1.dp, Color.White.copy(alpha = .07f), RoundedCornerShape(16.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .border(1.dp, Color.White.copy(alpha = .09f), RoundedCornerShape(7.dp))
+            .padding(horizontal = 8.dp, vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(formatNumber(world.appViews + world.webViews), color = Paper, fontWeight = FontWeight.Black, fontSize = 23.sp, letterSpacing = (-.5).sp)
-            Text("VERIFIED VIEWS THIS REIGN", color = Muted, fontFamily = mono, fontSize = 7.sp, letterSpacing = .8.sp)
-        }
-        LedgerMetric("APP", world.appViews, accent)
-        Spacer(Modifier.width(16.dp))
-        LedgerMetric("WEB", world.webViews, Ice)
+        LiveMetric("◉", "WATCHING NOW", formatNumber(world.liveWatchers), "PEOPLE", accent, Modifier.weight(1f))
+        Box(Modifier.width(1.dp).height(62.dp).background(Color.White.copy(alpha = .16f)))
+        LiveMetric(
+            "◷",
+            if (protectedSeconds > 0) "PROTECTION" else "SCREEN STATUS",
+            if (protectedSeconds > 0) formatDuration(protectedSeconds.toLong()) else "LIVE",
+            if (protectedSeconds > 0) "MIN : SEC" else "OPEN TO TAKE",
+            accent,
+            Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun LiveMetric(icon: String, label: String, value: String, footer: String, color: Color, modifier: Modifier = Modifier) {
+    Column(modifier.padding(horizontal = 12.dp)) {
+        Text("$icon  $label", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp)
+        Text(value, color = color, fontWeight = FontWeight.Black, fontSize = 28.sp, letterSpacing = (-1).sp, modifier = Modifier.padding(top = 3.dp))
+        Text(footer, color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 7.sp, letterSpacing = .8.sp)
     }
 }
 
@@ -455,32 +582,36 @@ private fun CrowdControls(
     onEcho: () -> Unit,
 ) {
     Column {
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("LIVE REACTIONS", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = .8.sp)
+            Text("${formatNumber(world.reactions.size)} TOTAL", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp)
+        }
+        Spacer(Modifier.height(9.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            ReactionOrb("🔥", "FIRE") { onReact("FIRE") }
+            ReactionOrb("👏", "RESPECT") { onReact("RESPECT") }
+            ReactionOrb("💯", "100") { onReact("100") }
+            ReactionOrb("👀", "WATCH") { onReact("WATCH") }
+            ReactionOrb("🚀", "ECHO") { onEcho() }
+        }
+    }
+}
+
+@Composable
+private fun ReactionOrb(icon: String, label: String, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier
+                .size(45.dp)
+                .clip(CircleShape)
+                .background(InkRaised)
+                .border(1.dp, Color.White.copy(alpha = .1f), CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
         ) {
-            listOf("THIEF", "TOO SLOW", "TAKE IT BACK", "RESPECT", "LOL").forEach { reaction ->
-                Surface(
-                    modifier = Modifier.clickable { onReact(reaction) },
-                    color = Color.White.copy(alpha = .055f),
-                    shape = RoundedCornerShape(999.dp),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = .09f)),
-                ) {
-                    Text(reaction, color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp))
-                }
-            }
-            Surface(
-                modifier = Modifier.clickable(onClick = onEcho),
-                color = Acid.copy(alpha = .12f),
-                shape = RoundedCornerShape(999.dp),
-                border = BorderStroke(1.dp, Acid.copy(alpha = .35f)),
-            ) {
-                Text("ECHO THEIR WORDS", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 7.sp, modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp))
-            }
+            Text(icon, fontSize = 19.sp)
         }
-        world.reactions.firstOrNull()?.let { latest ->
-            Text("${latest.handle}: ${latest.reaction}", color = Muted, fontFamily = mono, fontSize = 7.sp, modifier = Modifier.padding(start = 4.dp, top = 7.dp))
-        }
+        Text(label, color = Muted, fontFamily = mono, fontSize = 6.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -495,36 +626,12 @@ private fun AuctionCard(
     val cooldown = world.cooldownRemainingSeconds
     val canRevenge = cooldown > 0 && world.credits > 0
     val canTake = protectedSeconds == 0 && (cooldown == 0 || canRevenge)
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF17171D), Color(0xFF0B0B0E))))
-            .border(1.dp, accent.copy(alpha = .32f), RoundedCornerShape(24.dp))
-            .padding(17.dp),
-    ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-            Column {
-                Text(if (isOwner) "YOUR REIGN" else if (cooldown == 0) "FREE STEAL READY" else "YOUR COOLDOWN", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = 1.2.sp)
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(if (isOwner) formatDuration((System.currentTimeMillis() - world.reign.startedAtMillis) / 1_000L) else if (cooldown == 0) "READY" else "${cooldown}s", color = Paper, fontWeight = FontWeight.Black, fontSize = 35.sp, letterSpacing = (-1).sp)
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (isOwner) "LIVE" else if (cooldown == 0) "FREE" else "LEFT", color = accent, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp, modifier = Modifier.padding(bottom = 7.dp))
-                }
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(if (protectedSeconds > 0) "LANDING" else "LIVE BATTLE", color = if (protectedSeconds > 0) Orange else Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp)
-                Text(if (protectedSeconds > 0) "${protectedSeconds}s" else "${world.takeoversToday} TAKES TODAY", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
-                Spacer(Modifier.height(7.dp))
-                DecaySparkline(accent, Modifier.width(86.dp).height(22.dp))
-            }
-        }
-        Spacer(Modifier.height(14.dp))
+    Column(Modifier.fillMaxWidth()) {
         Button(
             onClick = onPrimary,
             enabled = isOwner || canTake,
-            modifier = Modifier.fillMaxWidth().height(54.dp),
-            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth().height(58.dp),
+            shape = RoundedCornerShape(6.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = accent,
                 contentColor = Ink,
@@ -534,10 +641,10 @@ private fun AuctionCard(
         ) {
             Text(
                 when {
-                    isOwner -> "BROADCAST YOUR REIGN  ↗"
+                    isOwner -> "⚡  BROADCAST YOUR REIGN"
                     protectedSeconds > 0 -> "TAKEOVER LANDS IN ${protectedSeconds}s"
-                    cooldown == 0 -> "STEAL ONE — FREE  →"
-                    canRevenge -> "REVENGE NOW — 1 TICKET  →"
+                    cooldown == 0 -> "⚡  TAKE THE SCREEN"
+                    canRevenge -> "🎟  REVENGE NOW — 1 TICKET"
                     else -> "FREE STEAL RECHARGES IN ${cooldown}s"
                 },
                 fontWeight = FontWeight.Black,
@@ -545,12 +652,12 @@ private fun AuctionCard(
                 letterSpacing = .4.sp,
             )
         }
-        Spacer(Modifier.height(9.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
-            if (world.connected) "${world.credits} REVENGE TICKETS // STALE-RACE LOSERS SPEND NOTHING" else if (world.demoMode) "LOCAL DEMO // CONNECT SUPABASE FOR GLOBAL PLAY" else "OFFLINE // RECONNECTING TO ONE",
+            if (isOwner) "The world is watching your message." else "Challenge ${world.reign.owner.handle} to take ONE.",
             color = Muted,
             fontFamily = mono,
-            fontSize = 7.sp,
+            fontSize = 8.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -572,7 +679,7 @@ private fun LibraryScreen(
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 112.dp),
     ) {
-        SectionHeader("MESSAGE LIBRARY", "${world.messages.count { it.status == MessageStatus.APPROVED }} APPROVED")
+        SectionHeader("YOUR WORDS", "${world.messages.count { it.status == MessageStatus.APPROVED }} APPROVED")
         Spacer(Modifier.height(24.dp))
         Text("YOUR WORDS,\nREADY FOR THE WORLD.", color = Paper, fontWeight = FontWeight.Black, fontSize = 39.sp, lineHeight = 37.sp, letterSpacing = (-1.4).sp)
         Text("Messages are screened before they can enter the live battle.", color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 11.dp, bottom = 20.dp))
@@ -601,9 +708,9 @@ private fun MessageCard(message: OneMessage, selected: Boolean, onDeploy: () -> 
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(21.dp))
+            .clip(RoundedCornerShape(7.dp))
             .background(InkRaised)
-            .border(1.dp, if (selected) statusColor.copy(alpha = .65f) else Color.White.copy(alpha = .06f), RoundedCornerShape(21.dp))
+            .border(1.dp, if (selected) statusColor.copy(alpha = .65f) else Color.White.copy(alpha = .08f), RoundedCornerShape(7.dp))
             .padding(17.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -629,6 +736,14 @@ private fun MessageCard(message: OneMessage, selected: Boolean, onDeploy: () -> 
 
 @Composable
 private fun HallScreen(world: WorldState) {
+    var period by rememberSaveable { mutableStateOf(HallPeriod.TODAY) }
+    var showFull by rememberSaveable { mutableStateOf(false) }
+    val today = world.hallToday.ifEmpty { world.hall }
+    val allTime = world.hallAllTime.ifEmpty { world.hall }
+    val selectedEntries = if (period == HallPeriod.TODAY) today else allTime
+    val visibleEntries = if (showFull) selectedEntries else selectedEntries.take(4)
+    val selectedPeriodIsLive = world.connected && !world.demoMode && (period == HallPeriod.TODAY || world.hallAllTimeLive)
+
     Column(
         Modifier
             .fillMaxSize()
@@ -637,24 +752,51 @@ private fun HallScreen(world: WorldState) {
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 112.dp),
     ) {
-        SectionHeader("HALL OF ONE", "SEASON 01")
-        Spacer(Modifier.height(24.dp))
-        Text("FAME OUTLIVES\nTHE REIGN.", color = Paper, fontWeight = FontWeight.Black, fontSize = 43.sp, lineHeight = 40.sp, letterSpacing = (-1.6).sp)
-        Text("The live object never resets. The legends do—every day at 00:00 UTC.", color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 11.dp))
-        Spacer(Modifier.height(22.dp))
-        HallHero(world.hall.first())
-        Spacer(Modifier.height(12.dp))
-        world.hall.drop(1).forEach { entry ->
-            HallRow(entry)
-            Spacer(Modifier.height(9.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+            Column {
+                Text("THE HALL.", color = Paper, fontWeight = FontWeight.Black, fontSize = 54.sp, lineHeight = 50.sp, letterSpacing = (-2.2).sp)
+                Text("RANKED FROM VERIFIED LIVE REIGNS", color = Muted, fontFamily = mono, fontSize = 7.sp, letterSpacing = .8.sp, modifier = Modifier.padding(top = 7.dp))
+            }
+            StatusPill(if (selectedPeriodIsLive) "LIVE DATA" else if (world.demoMode) "PREVIEW" else "SYNCING", if (selectedPeriodIsLive) Acid else Orange)
         }
-        Spacer(Modifier.height(16.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatBlock(formatNumber(world.appViews + world.webViews), "LIVE REIGN VIEWS", Modifier.weight(1f))
-            StatBlock(formatNumber(world.takeoversToday), "TAKEOVERS TODAY", Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth().padding(top = 14.dp).height(43.dp).clip(RoundedCornerShape(7.dp)).border(1.dp, Color.White.copy(alpha = .14f), RoundedCornerShape(7.dp))) {
+            Box(Modifier.weight(1f).fillMaxHeight().background(if (period == HallPeriod.TODAY) Acid else Color.Transparent).clickable { period = HallPeriod.TODAY; showFull = false }, contentAlignment = Alignment.Center) {
+                Text("TODAY", color = if (period == HallPeriod.TODAY) Ink else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp)
+            }
+            Box(Modifier.weight(1f).fillMaxHeight().background(if (period == HallPeriod.ALL_TIME) Acid else Color.Transparent).clickable { period = HallPeriod.ALL_TIME; showFull = false }, contentAlignment = Alignment.Center) {
+                Text("ALL TIME", color = if (period == HallPeriod.ALL_TIME) Ink else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp)
+            }
         }
+        Spacer(Modifier.height(18.dp))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+            Text("#", color = Muted, fontFamily = mono, fontSize = 7.sp, modifier = Modifier.width(28.dp))
+            Text("OWNER", color = Muted, fontFamily = mono, fontSize = 7.sp, modifier = Modifier.weight(1f))
+            Text("REIGN", color = Muted, fontFamily = mono, fontSize = 7.sp, modifier = Modifier.width(70.dp), textAlign = TextAlign.End)
+            Text("VIEWS", color = Muted, fontFamily = mono, fontSize = 7.sp, modifier = Modifier.width(62.dp), textAlign = TextAlign.End)
+        }
+        Spacer(Modifier.height(7.dp))
+        AnimatedContent(period, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(140)) }, label = "hall-period") {
+            Column {
+                if (visibleEntries.isEmpty()) {
+                    Column(Modifier.fillMaxWidth().padding(vertical = 52.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("◇", color = Acid, fontSize = 30.sp)
+                        Text("THE HALL IS WAITING", color = Paper, fontWeight = FontWeight.Black, fontSize = 17.sp, modifier = Modifier.padding(top = 10.dp))
+                        Text("The first verified reign will appear here.", color = Muted, fontFamily = mono, fontSize = 8.sp, modifier = Modifier.padding(top = 5.dp))
+                    }
+                } else {
+                    visibleEntries.forEach { entry -> HallRow(entry, entry.owner.id == world.currentUserId) }
+                }
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+        Surface(color = if (showFull) Acid else Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Acid.copy(alpha = .75f)), modifier = Modifier.fillMaxWidth().clickable { showFull = !showFull }) {
+            Text(if (showFull) "COLLAPSE LEADERBOARD  ↑" else "VIEW FULL LEADERBOARD  ↓", color = if (showFull) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(16.dp))
+        }
+        Text("${selectedEntries.size} VERIFIED REIGNS // ${if (selectedPeriodIsLive) "UPDATED LIVE" else "SERVER UPDATE REQUIRED"}", color = Muted, fontFamily = mono, fontSize = 7.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
     }
 }
+
+private enum class HallPeriod { TODAY, ALL_TIME }
 
 @Composable
 private fun YouScreen(
@@ -670,6 +812,7 @@ private fun YouScreen(
     onFeedback: () -> Unit,
     onUnblockAll: () -> Unit,
     onDeleteAccount: () -> Unit,
+    onHowItWorks: () -> Unit,
 ) {
     val user = world.currentUser
     val handle = user?.handle ?: if (world.demoMode) "@BOWEI" else "@CONNECTING"
@@ -682,23 +825,31 @@ private fun YouScreen(
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 112.dp),
     ) {
-        SectionHeader("YOUR ONE", "FOUNDING SURVIVOR")
-        Spacer(Modifier.height(22.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(74.dp).clip(CircleShape).background(Acid), contentAlignment = Alignment.Center) {
-                Text(initials, color = Ink, fontWeight = FontWeight.Black, fontSize = 25.sp)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("YOU.", color = Paper, fontWeight = FontWeight.Black, fontSize = 54.sp, lineHeight = 50.sp, letterSpacing = (-2.2).sp)
+            CircleAction("ⓘ", onHowItWorks)
+        }
+        Spacer(Modifier.height(18.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(64.dp).clip(CircleShape).background(Ink).border(2.dp, Acid, CircleShape), contentAlignment = Alignment.Center) {
+                Text(initials, color = Acid, fontWeight = FontWeight.Black, fontSize = 22.sp)
             }
-            Spacer(Modifier.width(14.dp))
-            Column {
-                Text(handle, color = Paper, fontWeight = FontWeight.Black, fontSize = 28.sp)
-                Text(if (world.connected) "${user?.city ?: "EARTH"}, ${user?.countryCode ?: "XX"}  ◆ GLOBAL ID" else "CONNECTING TO GLOBAL ID", color = Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = .8.sp)
+            Spacer(Modifier.width(13.dp))
+            Column(Modifier.weight(1f)) {
+                Text(handle, color = Paper, fontWeight = FontWeight.Black, fontSize = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (world.connected) "${user?.city ?: "EARTH"}, ${user?.countryCode ?: "XX"}" else "CONNECTING", color = Muted, fontFamily = mono, fontSize = 9.sp, letterSpacing = .7.sp)
+            }
+            Box(Modifier.width(1.dp).height(56.dp).background(Color.White.copy(alpha = .16f)))
+            Column(Modifier.padding(start = 16.dp).clickable(onClick = onVault), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(world.credits.toString(), color = Acid, fontWeight = FontWeight.Black, fontSize = 25.sp)
+                Text("TICKETS", color = Muted, fontFamily = mono, fontSize = 7.sp)
             }
         }
         Spacer(Modifier.height(22.dp))
-        WalletHero(world.credits, onVault)
-        Spacer(Modifier.height(12.dp))
-        DailyCapCard(world)
-        Spacer(Modifier.height(12.dp))
+        Text("YOUR STATS", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = .8.sp)
+        Spacer(Modifier.height(8.dp))
+        UserStatsPanel(world)
+        Spacer(Modifier.height(14.dp))
         SettingsCard(
             title = "PUBLIC HANDLE",
             detail = "$handle is your public alias. ONE never asks for your legal name.",
@@ -720,33 +871,33 @@ private fun YouScreen(
         )
         Spacer(Modifier.height(10.dp))
         SettingsCard(
-            title = "REVENUECAT REVENGE",
+            title = "REVENGE TICKETS",
             detail = if (revenueCatReady) "Live ticket packs are connected and server verified." else "Add the public SDK key to activate ticket packs.",
-            badge = if (revenueCatReady) "LIVE" else "OFF",
+            badge = "›",
             accent = Acid,
             onClick = onVault,
         )
         Spacer(Modifier.height(10.dp))
         SettingsCard(
             title = "INVITE THE AUDIENCE",
-            detail = "Every new viewer makes the only screen more valuable.",
-            badge = "SHARE",
+            detail = "Share ONE. Grow the movement.",
+            badge = "›",
             accent = Ice,
             onClick = onShareONE,
         )
         Spacer(Modifier.height(10.dp))
         SettingsCard(
             title = "PRIVACY & DATA",
-            detail = "Read exactly what ONE collects, publishes and retains.",
-            badge = "OPEN",
+            detail = "Control your data and visibility.",
+            badge = "›",
             accent = Ice,
             onClick = onOpenPrivacy,
         )
         Spacer(Modifier.height(10.dp))
         SettingsCard(
-            title = "SEND FEEDBACK",
-            detail = "Tell us what worked, broke, confused you, or should exist next. Your note is sent to the ONE team.",
-            badge = "SEND",
+            title = "SUPPORT",
+            detail = "Help centre, feedback and contact options.",
+            badge = "›",
             accent = Acid,
             onClick = onFeedback,
         )
@@ -782,6 +933,7 @@ private fun ChallengeOverlay(
     onSelectMessage: (String) -> Unit,
     onBegin: () -> Unit,
     onOpenVault: () -> Unit,
+    onInfo: () -> Unit,
 ) {
     val accent = Acid
     val needsTicket = world.cooldownRemainingSeconds > 0
@@ -790,61 +942,169 @@ private fun ChallengeOverlay(
     val busy = ui.challengePhase !in listOf(ChallengePhase.IDLE, ChallengePhase.FAILED)
 
     Box(Modifier.fillMaxSize().background(Ink)) {
-        LiveField(accent, Modifier.fillMaxSize().graphicsLayer { alpha = .45f })
         Column(
             Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
+                .navigationBarsPadding(),
         ) {
-            OverlayHeader("TAKE ONE", "RACE-SAFE RESERVATION", onClose)
-            Spacer(Modifier.height(24.dp))
-            Text("ONE SCREEN.\nONE WINNER.", color = Paper, fontWeight = FontWeight.Black, fontSize = 45.sp, lineHeight = 42.sp, letterSpacing = (-1.6).sp)
-            Text("The first server-verified steal commits. A stale-race loser spends nothing.", color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 10.dp))
-            Spacer(Modifier.height(21.dp))
+            Row(
+                Modifier.fillMaxWidth().height(64.dp).background(Orange).padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("‹", color = Ink, fontSize = 28.sp, fontWeight = FontWeight.Black, modifier = Modifier.clickable(onClick = onClose))
+                Text("TAKE ONE", color = Ink, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                Text("ⓘ", color = Ink, fontSize = 20.sp, modifier = Modifier.clickable(onClick = onInfo).padding(8.dp))
+            }
 
-            RaceCard(world)
-            Spacer(Modifier.height(17.dp))
-            Text("CHOOSE YOUR APPROVED MESSAGE", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.sp)
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                world.messages.filter { it.status == MessageStatus.APPROVED }.forEach { message ->
-                    SelectableMessage(message, selected = message.id == ui.selectedMessageId) {
-                        if (!busy) onSelectMessage(message.id)
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 17.dp),
+            ) {
+                Text("CURRENT OWNER", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = .8.sp)
+                Spacer(Modifier.height(9.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OwnerMark(world.reign.owner.initials, accent)
+                    Spacer(Modifier.width(11.dp))
+                    Column {
+                        Text(world.reign.owner.handle, color = Paper, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text("${world.reign.owner.city.uppercase()}, ${world.reign.owner.countryCode}", color = Muted, fontFamily = mono, fontSize = 9.sp)
                     }
                 }
-            }
-            Spacer(Modifier.height(20.dp))
+                Box(Modifier.fillMaxWidth().padding(vertical = 15.dp).height(1.dp).background(Color.White.copy(alpha = .13f)))
+                Text("THE MESSAGE", color = Muted, fontFamily = mono, fontSize = 8.sp)
+                Text(world.reign.message.text, color = Paper, fontWeight = FontWeight.Black, fontSize = 25.sp, lineHeight = 25.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+                Text("Choose your move.", color = Muted, fontFamily = mono, fontSize = 9.sp, modifier = Modifier.padding(top = 9.dp, bottom = 14.dp))
 
-            AnimatedContent(ui.challengePhase, label = "challenge-phase") { phase ->
-                when (phase) {
-                    ChallengePhase.IDLE, ChallengePhase.FAILED -> Column {
-                        if (phase == ChallengePhase.FAILED) {
-                            ErrorStrip(ui.challengeStatus)
-                            Spacer(Modifier.height(11.dp))
+                ChallengeChoice("ϟ", "FREE STEAL", "Fastest path. Ready after cooldown.", if (needsTicket) "${world.cooldownRemainingSeconds}s" else "READY", Acid, selected = !needsTicket)
+                Spacer(Modifier.height(10.dp))
+                ChallengeChoice("🎟", "REVENGE TICKET", "Skip the cooldown. Spent only if you win.", "${world.credits} LEFT", Ice, selected = needsTicket && world.credits > 0, onClick = if (world.credits == 0) onOpenVault else null)
+                Spacer(Modifier.height(16.dp))
+                Text("YOUR APPROVED MESSAGE", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = .7.sp)
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    world.messages.filter { it.status == MessageStatus.APPROVED }.forEach { message ->
+                        SelectableMessage(message, selected = message.id == ui.selectedMessageId) {
+                            if (!busy) onSelectMessage(message.id)
                         }
-                        if (!canAttempt) {
-                            PrimaryButton("FREE STEAL IN ${world.cooldownRemainingSeconds}s", Ice, onOpenVault)
-                        } else {
-                            HoldToOwnButton(
-                                text = if (needsTicket) "HOLD TO REVENGE  •  1 TICKET" else "HOLD TO STEAL ONE  •  FREE",
-                                enabled = selected != null,
-                                onComplete = onBegin,
-                            )
-                        }
-                        Spacer(Modifier.height(9.dp))
-                        Text("${world.credits} REVENGE TICKETS  //  ${if (needsTicket) "ONE SPENT ONLY IF YOU WIN" else "FREE TAKE READY"}", color = Muted, fontFamily = mono, fontSize = 8.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     }
-                    ChallengePhase.WON -> WonPanel(selected?.text.orEmpty())
-                    else -> ProtocolProgress(phase, ui.challengeStatus)
                 }
+                Spacer(Modifier.height(17.dp))
+
+                AnimatedContent(ui.challengePhase, label = "challenge-phase") { phase ->
+                    when (phase) {
+                        ChallengePhase.IDLE, ChallengePhase.FAILED -> Column {
+                            if (phase == ChallengePhase.FAILED) {
+                                ErrorStrip(ui.challengeStatus)
+                                Spacer(Modifier.height(10.dp))
+                            }
+                            if (!canAttempt) {
+                                PrimaryButton("GET A REVENGE TICKET", Ice, onOpenVault)
+                            } else {
+                                HoldToOwnButton(
+                                    text = if (needsTicket) "HOLD TO CONTINUE — 1 TICKET" else "HOLD TO CONTINUE — FREE",
+                                    enabled = selected != null,
+                                    onComplete = onBegin,
+                                )
+                            }
+                        }
+                        ChallengePhase.WON -> WonPanel(selected?.text.orEmpty())
+                        else -> ProtocolProgress(phase, ui.challengeStatus)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
             }
-            Spacer(Modifier.height(18.dp))
-            RuleStrip("free steal cooldown", "instant revenge ticket", "atomic race")
         }
         if (ui.challengePhase == ChallengePhase.WON) TakeoverFlash(Modifier.fillMaxSize())
+    }
+}
+
+@Composable
+private fun UserStatsPanel(world: WorldState) {
+    val longest = world.history.maxOfOrNull { it.durationSeconds } ?: world.userDailyReignSeconds
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).border(1.dp, Color.White.copy(alpha = .14f), RoundedCornerShape(8.dp)).padding(vertical = 15.dp)) {
+        ProfileStat("⬡", formatDuration(longest.toLong()), "LONGEST REIGN", Modifier.weight(1f))
+        Box(Modifier.width(1.dp).height(58.dp).background(Color.White.copy(alpha = .14f)))
+        ProfileStat("ϟ", world.userRetakesToday.toString(), "TAKEOVERS", Modifier.weight(1f))
+        Box(Modifier.width(1.dp).height(58.dp).background(Color.White.copy(alpha = .14f)))
+        ProfileStat("◉", formatNumber(world.history.sumOf { it.totalViews }), "VERIFIED VIEWS", Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun ProfileStat(icon: String, value: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(icon, color = Paper, fontSize = 14.sp)
+        Text(value, color = Acid, fontWeight = FontWeight.Black, fontSize = 15.sp, modifier = Modifier.padding(top = 5.dp))
+        Text(label, color = Muted, fontFamily = mono, fontSize = 6.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 3.dp))
+    }
+}
+
+@Composable
+private fun ChallengeChoice(
+    icon: String,
+    title: String,
+    detail: String,
+    status: String,
+    color: Color,
+    selected: Boolean,
+    onClick: (() -> Unit)? = null,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(88.dp)
+            .clip(RoundedCornerShape(7.dp))
+            .background(if (selected) color else InkRaised)
+            .border(1.dp, color.copy(alpha = if (selected) 1f else .58f), RoundedCornerShape(7.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(icon, color = if (selected) Ink else color, fontWeight = FontWeight.Black, fontSize = 28.sp)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = if (selected) Ink else Paper, fontWeight = FontWeight.Black, fontSize = 17.sp)
+            Text(detail, color = if (selected) Ink.copy(alpha = .68f) else Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 11.sp, modifier = Modifier.padding(top = 3.dp))
+        }
+        Text(status, color = if (selected) Ink else color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp, textAlign = TextAlign.End)
+    }
+}
+
+@Composable
+private fun HowItWorksOverlay(onClose: () -> Unit) {
+    Box(Modifier.fillMaxSize().background(Ink)) {
+        LiveField(Acid, Modifier.fillMaxSize())
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp)) {
+            OverlayHeader("THE RULES", "ONE SCREEN // ONE OWNER", onClose)
+            Spacer(Modifier.height(30.dp))
+            Text("SIMPLE ENOUGH\nTO FEEL DANGEROUS.", color = Paper, fontWeight = FontWeight.Black, fontSize = 39.sp, lineHeight = 36.sp, letterSpacing = (-1.5).sp)
+            Text("Everything you tap in ONE changes the same live world for everyone.", color = Muted, fontFamily = mono, fontSize = 9.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 24.dp))
+            RuleCard("01", "◉", "WATCH", "There is only one live message. Views count once per verified viewer and reign.", Acid)
+            Spacer(Modifier.height(10.dp))
+            RuleCard("02", "ϟ", "TAKE", "Choose an approved message and hold to challenge. The server decides the winner atomically.", Orange)
+            Spacer(Modifier.height(10.dp))
+            RuleCard("03", "♛", "DEFEND", "Your reign lasts until somebody takes it. Every second and verified view enters The Hall.", Ice)
+            Spacer(Modifier.height(18.dp))
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(Acid).padding(18.dp)) {
+                Text("NO FAKE NUMBERS.", color = Ink, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                Text("LIVE DATA IS LABELLED LIVE. When disconnected, ONE says so instead of pretending.", color = Ink.copy(alpha = .68f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, lineHeight = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+            Spacer(Modifier.height(18.dp))
+            PrimaryButton("I’M READY  →", Acid, onClose)
+        }
+    }
+}
+
+@Composable
+private fun RuleCard(index: String, icon: String, title: String, detail: String, color: Color) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(InkRaised).border(1.dp, color.copy(alpha = .42f), RoundedCornerShape(7.dp)).padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(52.dp).clip(CircleShape).background(color), contentAlignment = Alignment.Center) { Text(icon, color = Ink, fontWeight = FontWeight.Black, fontSize = 23.sp) }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text("$index / $title", color = Paper, fontWeight = FontWeight.Black, fontSize = 16.sp)
+            Text(detail, color = Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
+        }
     }
 }
 
@@ -1022,8 +1282,8 @@ private fun ReceiptOverlay(
     val total = appViews + webViews
     val duration = if (stillOwner) ((System.currentTimeMillis() - resolved.startedAtMillis) / 1_000L).toInt() else resolved.durationSeconds
 
-    Box(Modifier.fillMaxSize().background(Acid)) {
-        CertificateField(Modifier.fillMaxSize())
+    Box(Modifier.fillMaxSize().background(Ink)) {
+        VictoryConfetti(Modifier.fillMaxSize())
         Column(
             Modifier
                 .fillMaxSize()
@@ -1033,42 +1293,57 @@ private fun ReceiptOverlay(
                 .padding(20.dp),
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                OneLogo(Ink, compact = true)
-                Text(if (stillOwner) "LIVE OWNERSHIP" else "REIGN COMPLETE", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.sp)
-                CircleActionDark("×", onClose)
+                OneLogo(Acid, compact = true)
+                Text(if (stillOwner) "LIVE OWNERSHIP" else "REIGN COMPLETE", color = Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.sp)
+                CircleAction("×", onClose)
             }
-            Spacer(Modifier.height(34.dp))
-            Text(if (stillOwner) "YOU OWNED\nTHE INTERNET." else "YOU WERE\nTHE INTERNET.", color = Ink, fontWeight = FontWeight.Black, fontSize = 48.sp, lineHeight = 44.sp, letterSpacing = (-2).sp)
-            Spacer(Modifier.height(24.dp))
-            Box(Modifier.fillMaxWidth().background(Ink, RoundedCornerShape(24.dp)).padding(20.dp)) {
-                Column {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("CERTIFICATE OF ONE", color = Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 9.sp)
-                        Text("SERVER-VERIFIED*", color = Ice, fontFamily = mono, fontSize = 8.sp)
-                    }
-                    Spacer(Modifier.height(25.dp))
-                    Text("“${resolved.message}”", color = Paper, fontWeight = FontWeight.Black, fontSize = 25.sp, lineHeight = 28.sp)
-                    Spacer(Modifier.height(28.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        ReceiptMetric(formatNumber(total), "VERIFIED VIEWS")
-                        ReceiptMetric(formatDuration(duration.toLong()), "REIGN")
-                        ReceiptMetric(resolved.paidCredits.toString(), "REVENGE TICKETS")
-                    }
-                    Spacer(Modifier.height(21.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("TOOK FROM ${resolved.previousOwner}", color = Muted, fontFamily = mono, fontSize = 8.sp)
-                        Text(resolved.dethronedBy?.let { "LOST TO $it" } ?: "STATUS: LIVE", color = if (resolved.dethronedBy == null) Acid else Orange, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp)
-                    }
-                }
-            }
-            Spacer(Modifier.height(17.dp))
-            PrimaryButton("BROADCAST THE PROOF  ↗", Ink, onShare, foreground = Acid)
-            Spacer(Modifier.height(10.dp))
-            Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onClose), color = Color.Transparent, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, Ink.copy(alpha = .35f))) {
-                Text("RETURN TO THE LIVE SCREEN", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 10.sp, modifier = Modifier.padding(16.dp))
+            Spacer(Modifier.height(20.dp))
+            VictorySeal()
+            Spacer(Modifier.height(18.dp))
+            Text(if (stillOwner) "YOU OWN ONE." else "YOUR REIGN\nIS HISTORY.", color = Paper, fontWeight = FontWeight.Black, fontSize = 46.sp, lineHeight = 43.sp, letterSpacing = (-2.sp))
+            Text(if (stillOwner) "You took the screen. It’s yours." else "The screen moved on. Your proof remains.", color = Muted, fontFamily = mono, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+            Spacer(Modifier.height(20.dp))
+            Text("YOUR LIVE MESSAGE", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = .8.sp)
+            Box(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).background(InkRaised).border(1.dp, Acid.copy(alpha = .65f), RoundedCornerShape(8.dp)).padding(17.dp)) {
+                Text(resolved.message, color = Paper, fontWeight = FontWeight.Black, fontSize = 20.sp, lineHeight = 23.sp)
             }
             Spacer(Modifier.height(14.dp))
-            Text("*Issued from the authoritative global takeover ledger.", color = Ink.copy(alpha = .56f), fontFamily = mono, fontSize = 7.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = .34f)).border(1.dp, Color.White.copy(alpha = .15f), RoundedCornerShape(8.dp)).padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                ReceiptMetric(if (stillOwner) "04:59" else formatDuration(duration.toLong()), if (stillOwner) "PROTECTION" else "REIGN", Modifier.weight(1f))
+                Box(Modifier.width(1.dp).height(48.dp).background(Color.White.copy(alpha = .14f)))
+                ReceiptMetric(formatNumber(total), "VERIFIED VIEWS", Modifier.weight(1f))
+            }
+            Spacer(Modifier.weight(1f))
+            PrimaryButton(if (stillOwner) "GO LIVE  ((•))" else "WATCH LIVE", Acid, onClose)
+            Spacer(Modifier.height(10.dp))
+            Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onShare), color = Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .18f))) {
+                Text("SHARE THE PROOF  ↗", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(15.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun VictorySeal() {
+    Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(164.dp).border(2.dp, Acid, CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(116.dp).border(1.dp, Acid.copy(alpha = .7f), CircleShape), contentAlignment = Alignment.Center) {
+                Text("1", color = Acid, fontWeight = FontWeight.Black, fontSize = 78.sp, letterSpacing = (-5).sp)
+            }
+            Text("YOU OWN ONE", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp, letterSpacing = 1.sp, modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp))
+            Text("THE WORLD IS WATCHING", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 6.sp, letterSpacing = .7.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
+        }
+    }
+}
+
+@Composable
+private fun VictoryConfetti(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val colors = listOf(Acid, Orange, Ice)
+        repeat(24) { index ->
+            val x = ((index * 97) % 389) / 389f * size.width
+            val y = ((index * 53) % 173) / 173f * size.height * .32f
+            drawRect(colors[index % colors.size].copy(alpha = .8f), topLeft = Offset(x, y), size = androidx.compose.ui.geometry.Size(4.dp.toPx(), 10.dp.toPx()))
         }
     }
 }
@@ -1143,11 +1418,10 @@ private fun ComposeOverlay(
 @Composable
 private fun VaultOverlay(
     world: WorldState,
-    ui: OneUiState,
     revenueCatReady: Boolean,
     onClose: () -> Unit,
-    onWatchAd: () -> Unit,
     onPurchase: (Int) -> Unit,
+    onRestore: () -> Unit,
 ) {
     Column(
         Modifier
@@ -1158,39 +1432,29 @@ private fun VaultOverlay(
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
-        OverlayHeader("ONE VAULT", if (revenueCatReady) "REVENUECAT LIVE" else "PURCHASES NOT CONFIGURED", onClose)
+        OverlayHeader("‹", if (revenueCatReady) "LIVE STORE" else "STORE OFFLINE", onClose)
         Spacer(Modifier.height(24.dp))
-        Text("${formatNumber(world.credits)}", color = Acid, fontWeight = FontWeight.Black, fontSize = 66.sp, letterSpacing = (-3).sp)
-        Text("REVENGE TICKETS", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.5.sp)
-        Text("Tickets skip your cooldown. They have no cash value and cannot leave ONE.", color = Muted, fontFamily = mono, fontSize = 8.sp, modifier = Modifier.padding(top = 6.dp))
-        Spacer(Modifier.height(23.dp))
-
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Brush.linearGradient(listOf(Color(0xFF193847), Color(0xFF0A151B)))).border(1.dp, Ice.copy(alpha = .45f), RoundedCornerShape(24.dp)).padding(18.dp)) {
-            Column {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    StatusPill("CATVERTISING", Ice)
-                    Text("+1 TICKET", color = Ice, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 11.sp)
-                }
-                Spacer(Modifier.height(20.dp))
-                Text("INTERCEPT A\nSPONSOR SIGNAL.", color = Paper, fontWeight = FontWeight.Black, fontSize = 30.sp, lineHeight = 29.sp)
-                Text("Verified rewarded ad. Capped daily. No spoofable client reward.", color = Muted, fontFamily = mono, fontSize = 9.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 9.dp))
-                Spacer(Modifier.height(16.dp))
-                if (ui.adPlaying) {
-                    LinearProgressIndicator(progress = { ui.adProgress }, modifier = Modifier.fillMaxWidth().height(7.dp).clip(CircleShape), color = Ice, trackColor = Color.White.copy(alpha = .12f))
-                    Text("VERIFYING SERVER-SIDE REWARD…", color = Ice, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, modifier = Modifier.padding(top = 9.dp))
-                } else {
-                    PrimaryButton("WATCH TRANSMISSION  +1", Ice, onWatchAd)
-                }
-            }
+        Text("REVENGE TICKETS.", color = Paper, fontWeight = FontWeight.Black, fontSize = 43.sp, lineHeight = 40.sp, letterSpacing = (-1.8).sp)
+        Text("Skip your cooldown. Take ONE back now.", color = Muted, fontFamily = mono, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+        Box(Modifier.fillMaxWidth().padding(vertical = 18.dp).height(1.dp).background(Color.White.copy(alpha = .14f)))
+        Text("YOUR BALANCE", color = Muted, fontFamily = mono, fontSize = 8.sp)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp, bottom = 20.dp)) {
+            Text("🎟", fontSize = 27.sp)
+            Spacer(Modifier.width(12.dp))
+            Text("${formatNumber(world.credits)} TICKETS", color = Acid, fontWeight = FontWeight.Black, fontSize = 22.sp)
         }
-        Spacer(Modifier.height(21.dp))
-        Text("REVENGE PACKS", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.1.sp)
-        Spacer(Modifier.height(9.dp))
-        CreditPack("SPARK", 3, "£0.99", false) { onPurchase(3) }
-        CreditPack("CHALLENGER", 20, "£4.99", true) { onPurchase(20) }
-        CreditPack("HEADLINER", 50, "£9.99", false) { onPurchase(50) }
+
+        CreditPack("ϟ", "SPARK", 3, "£0.99", Acid) { onPurchase(3) }
+        Spacer(Modifier.height(11.dp))
+        CreditPack("✦", "CHALLENGER", 20, "£4.99", Ice) { onPurchase(20) }
+        Spacer(Modifier.height(11.dp))
+        CreditPack("♛", "HEADLINER", 50, "£9.99", Orange) { onPurchase(50) }
+        Spacer(Modifier.height(22.dp))
+        Text("PURCHASES ARE PROCESSED BY GOOGLE PLAY AND VERIFIED SERVER-SIDE BEFORE TICKETS ARE ADDED.", color = Muted, fontFamily = mono, fontSize = 7.sp, lineHeight = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(14.dp))
-        Text("Live prices come from RevenueCat. Grants are mirrored only after the signed server webhook; this APK never contains a secret key.", color = Muted, fontFamily = mono, fontSize = 8.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.fillMaxWidth())
+        Surface(modifier = Modifier.fillMaxWidth().clickable(enabled = revenueCatReady, onClick = onRestore), color = Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .16f))) {
+            Text("↻  RESTORE GOOGLE PLAY PURCHASES", color = if (revenueCatReady) Paper else Muted, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(16.dp))
+        }
     }
 }
 
@@ -1301,7 +1565,7 @@ private fun FeedbackOverlay(
             enabled = canSubmit,
             modifier = Modifier.fillMaxWidth().height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink, disabledContainerColor = Color.White.copy(alpha = .08f), disabledContentColor = Muted),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(4.dp),
         ) {
             Text(if (ui.feedbackSending) "SENDING..." else "SEND TO THE ONE TEAM  ->", fontWeight = FontWeight.Black, fontSize = 12.sp)
         }
@@ -1369,35 +1633,36 @@ private fun BottomNav(selected: MainTab, onSelected: (MainTab) -> Unit, modifier
         modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 14.dp, vertical = 8.dp)
-            .height(66.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xF20E0E11))
-            .border(1.dp, Color.White.copy(alpha = .08f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 6.dp),
+            .height(72.dp)
+            .background(Color(0xFA080808))
+            .border(1.dp, Color.White.copy(alpha = .12f), RectangleShape),
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        NavItem("●", "LIVE", MainTab.LIVE, selected, onSelected)
-        NavItem("≡", "WORDS", MainTab.LIBRARY, selected, onSelected)
+        NavItem("ϟ", "LIVE", MainTab.LIVE, selected, onSelected)
+        NavItem("♜", "CHALLENGES", MainTab.LIBRARY, selected, onSelected)
         NavItem("♛", "HALL", MainTab.HALL, selected, onSelected)
-        NavItem("○", "YOU", MainTab.YOU, selected, onSelected)
+        NavItem("●", "YOU", MainTab.YOU, selected, onSelected)
     }
 }
 
 @Composable
-private fun NavItem(icon: String, label: String, tab: MainTab, selected: MainTab, onSelected: (MainTab) -> Unit) {
+private fun RowScope.NavItem(icon: String, label: String, tab: MainTab, selected: MainTab, onSelected: (MainTab) -> Unit) {
     val active = tab == selected
     Column(
         Modifier
-            .clip(RoundedCornerShape(15.dp))
+            .weight(1f)
+            .fillMaxHeight()
             .clickable { onSelected(tab) }
-            .background(if (active) Acid.copy(alpha = .1f) else Color.Transparent)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .background(Color.Transparent)
+            .padding(horizontal = 8.dp, vertical = 9.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Text(icon, color = if (active) Acid else Muted, fontWeight = FontWeight.Black, fontSize = 14.sp)
-        Text(label, color = if (active) Paper else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 7.sp, letterSpacing = .6.sp)
+        Text(icon, color = if (active) Acid else Muted, fontWeight = FontWeight.Black, fontSize = 16.sp)
+        Text(label, color = if (active) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = if (label.length > 8) 6.sp else 7.sp, letterSpacing = .3.sp)
+        Spacer(Modifier.height(5.dp))
+        Box(Modifier.width(34.dp).height(2.dp).background(if (active) Acid else Color.Transparent))
     }
 }
 
@@ -1406,7 +1671,20 @@ private fun LiveField(accent: Color, modifier: Modifier = Modifier) {
     // A device-sized radial shader made first render catastrophically slow on some
     // Android GPUs. Keep the field intentionally minimal: ONE's typography and live
     // state carry the visual drama, while the background stays cheap and responsive.
-    Box(modifier.background(Ink).background(accent.copy(alpha = .035f)))
+    Box(modifier.background(Ink).background(accent.copy(alpha = .025f))) {
+        Canvas(Modifier.fillMaxSize()) {
+            val horizon = size.height * .58f
+            repeat(7) { index ->
+                val y = horizon + index * 42.dp.toPx()
+                drawLine(Color.White.copy(alpha = .025f), Offset(0f, y), Offset(size.width, y), 1f)
+            }
+            repeat(48) { index ->
+                val x = ((index * 83) % 431) / 431f * size.width
+                val y = ((index * 149) % 467) / 467f * size.height
+                drawCircle(Color.White.copy(alpha = .035f), 1f, Offset(x, y))
+            }
+        }
+    }
 }
 
 @Composable
@@ -1461,9 +1739,9 @@ private fun HoldToOwnButton(text: String, enabled: Boolean, onComplete: () -> Un
         Modifier
             .fillMaxWidth()
             .height(62.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(5.dp))
             .background(if (enabled) Color(0xFF24242A) else Color(0xFF151518))
-            .border(1.dp, if (enabled) Acid.copy(alpha = .55f) else Muted.copy(alpha = .2f), RoundedCornerShape(16.dp))
+            .border(1.dp, if (enabled) Acid.copy(alpha = .65f) else Muted.copy(alpha = .2f), RoundedCornerShape(5.dp))
             .pointerInput(enabled) {
                 if (enabled) {
                     detectTapGestures(onPress = {
@@ -1507,7 +1785,7 @@ private fun WonPanel(message: String) {
 
 @Composable
 private fun RaceCard(world: WorldState) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp)).background(InkRaised).border(1.dp, Color.White.copy(alpha = .07f), RoundedCornerShape(19.dp)).padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(InkRaised).border(1.dp, Orange.copy(alpha = .5f), RoundedCornerShape(6.dp)).padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
         OwnerMark(world.reign.owner.initials, palette(world.reign.palette))
         Spacer(Modifier.width(11.dp))
         Column(Modifier.weight(1f)) {
@@ -1529,9 +1807,9 @@ private fun SelectableMessage(message: OneMessage, selected: Boolean, onClick: (
         Modifier
             .width(238.dp)
             .height(130.dp)
-            .clip(RoundedCornerShape(17.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(if (selected) Acid else InkRaised)
-            .border(1.dp, if (selected) Acid else Color.White.copy(alpha = .07f), RoundedCornerShape(17.dp))
+            .border(1.dp, if (selected) Acid else Color.White.copy(alpha = .09f), RoundedCornerShape(6.dp))
             .clickable(onClick = onClick)
             .padding(14.dp),
         verticalArrangement = Arrangement.SpaceBetween,
@@ -1543,7 +1821,7 @@ private fun SelectableMessage(message: OneMessage, selected: Boolean, onClick: (
 
 @Composable
 private fun HallHero(entry: HallEntry) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(25.dp)).background(Brush.linearGradient(listOf(Acid, Color(0xFFB9E800)))).padding(20.dp)) {
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(Brush.linearGradient(listOf(Acid, Color(0xFFB9E800)))).padding(20.dp)) {
         Column {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("#01 // TODAY", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp)
@@ -1561,21 +1839,26 @@ private fun HallHero(entry: HallEntry) {
 }
 
 @Composable
-private fun HallRow(entry: HallEntry) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(InkRaised).border(1.dp, Color.White.copy(alpha = .06f), RoundedCornerShape(18.dp)).padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("#${entry.rank.toString().padStart(2, '0')}", color = if (entry.rank == 2) Ice else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 13.sp)
-        Spacer(Modifier.width(13.dp))
-        Column(Modifier.weight(1f)) {
-            Text(entry.message, color = Paper, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${entry.owner.handle}  //  ${formatNumber(entry.verifiedViews)} VIEWS", color = Muted, fontFamily = mono, fontSize = 7.sp, modifier = Modifier.padding(top = 4.dp))
+private fun HallRow(entry: HallEntry, isCurrentUser: Boolean = false) {
+    val rankColor = when (entry.rank) { 1 -> Acid; 2 -> Ice; 3 -> Orange; else -> Muted }
+    Row(Modifier.fillMaxWidth().height(70.dp).background(if (isCurrentUser) Acid else Color.Transparent).border(0.5.dp, Color.White.copy(alpha = .08f)).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(entry.rank.toString(), color = if (isCurrentUser) Ink else rankColor, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.width(28.dp))
+        Box(Modifier.size(36.dp).clip(CircleShape).background(if (isCurrentUser) Ink else rankColor.copy(alpha = .18f)), contentAlignment = Alignment.Center) {
+            Text(entry.owner.initials, color = if (isCurrentUser) Acid else rankColor, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
         }
-        Text(formatDuration(entry.reignSeconds.toLong()), color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+        Spacer(Modifier.width(9.dp))
+        Column(Modifier.weight(1f)) {
+            Text(entry.owner.handle, color = if (isCurrentUser) Ink else Paper, fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1)
+            Text("${entry.owner.city.uppercase()}, ${entry.owner.countryCode}", color = if (isCurrentUser) Ink.copy(alpha = .65f) else Muted, fontFamily = mono, fontSize = 6.sp)
+        }
+        Text(formatDuration(entry.reignSeconds.toLong()), color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, modifier = Modifier.width(70.dp), textAlign = TextAlign.End)
+        Text(formatNumber(entry.verifiedViews), color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, modifier = Modifier.width(62.dp), textAlign = TextAlign.End)
     }
 }
 
 @Composable
 private fun WalletHero(credits: Int, onClick: () -> Unit) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Brush.linearGradient(listOf(Color(0xFF27272E), Color(0xFF111115)))).border(1.dp, Acid.copy(alpha = .33f), RoundedCornerShape(24.dp)).clickable(onClick = onClick).padding(19.dp)) {
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(Brush.linearGradient(listOf(Color(0xFF27272E), Color(0xFF111115)))).border(1.dp, Acid.copy(alpha = .42f), RoundedCornerShape(7.dp)).clickable(onClick = onClick).padding(19.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("ONE VAULT", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = 1.1.sp)
@@ -1594,7 +1877,7 @@ private fun WalletHero(credits: Int, onClick: () -> Unit) {
 @Composable
 private fun DailyCapCard(world: WorldState) {
     val progress = (1f - world.cooldownRemainingSeconds / 30f).coerceIn(0f, 1f)
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(InkRaised).border(1.dp, Color.White.copy(alpha = .06f), RoundedCornerShape(20.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(InkRaised).border(1.dp, Color.White.copy(alpha = .08f), RoundedCornerShape(7.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
                 drawCircle(Color.White.copy(alpha = .08f), style = Stroke(5.dp.toPx()))
@@ -1612,33 +1895,48 @@ private fun DailyCapCard(world: WorldState) {
 
 @Composable
 private fun SettingsCard(title: String, detail: String, badge: String, accent: Color, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(InkRaised).border(1.dp, accent.copy(alpha = .14f), RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(38.dp).clip(CircleShape).background(accent.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
+    val icon = when {
+        title.contains("ALERT") || title.contains("NOTIFICATION") -> "♢"
+        title.contains("TICKET") -> "ϟ"
+        title.contains("PRIVACY") -> "⬡"
+        title.contains("INVITE") -> "◎"
+        title.contains("SUPPORT") || title.contains("FEEDBACK") -> "?"
+        title.contains("DELETE") -> "×"
+        else -> "●"
+    }
+    Row(Modifier.fillMaxWidth().height(76.dp).clip(RoundedCornerShape(7.dp)).background(InkRaised).border(1.dp, Color.White.copy(alpha = .11f), RoundedCornerShape(7.dp)).clickable(onClick = onClick).padding(horizontal = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(36.dp).clip(CircleShape).border(1.dp, accent.copy(alpha = .7f), CircleShape), contentAlignment = Alignment.Center) {
+            Text(icon, color = accent, fontWeight = FontWeight.Black, fontSize = 15.sp)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, color = Paper, fontWeight = FontWeight.Black, fontSize = 13.sp)
+            Text(title, color = Paper, fontWeight = FontWeight.Black, fontSize = 12.sp)
             Text(detail, color = Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 12.sp, modifier = Modifier.padding(top = 3.dp))
         }
-        Text(badge, color = accent, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
+        Text(badge, color = accent, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = if (badge == "›") 22.sp else 8.sp)
     }
 }
 
 @Composable
-private fun CreditPack(name: String, amount: Int, price: String, popular: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(bottom = 9.dp).clip(RoundedCornerShape(17.dp)).background(if (popular) Acid.copy(alpha = .09f) else InkRaised).border(1.dp, if (popular) Acid.copy(alpha = .48f) else Color.White.copy(alpha = .06f), RoundedCornerShape(17.dp)).clickable(onClick = onClick).padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun CreditPack(icon: String, name: String, amount: Int, price: String, color: Color, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(104.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(color)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(icon, color = Ink, fontWeight = FontWeight.Black, fontSize = 34.sp)
+        Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(name, color = Paper, fontWeight = FontWeight.Black, fontSize = 14.sp)
-                if (popular) {
-                    Spacer(Modifier.width(7.dp))
-                    StatusPill("BEST VALUE", Acid)
-                }
-            }
-            Text("${formatNumber(amount)} REVENGE TICKETS", color = Muted, fontFamily = mono, fontSize = 8.sp, modifier = Modifier.padding(top = 3.dp))
+            Text(name, color = Ink, fontWeight = FontWeight.Black, fontSize = 20.sp)
+            Text("${formatNumber(amount)} TICKETS", color = Ink.copy(alpha = .76f), fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp))
         }
-        Text(price, color = if (popular) Acid else Paper, fontWeight = FontWeight.Black, fontSize = 16.sp)
+        Box(Modifier.width(1.dp).height(72.dp).background(Ink.copy(alpha = .25f)))
+        Text(price, color = Ink, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.padding(start = 18.dp))
     }
 }
 
@@ -1682,14 +1980,60 @@ private fun ErrorStrip(text: String) {
 
 @Composable
 private fun RevengeBanner(text: String, onOpen: () -> Unit, onDismiss: () -> Unit) {
-    Row(Modifier.fillMaxWidth().background(Orange).statusBarsPadding().clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("!", color = Ink, fontWeight = FontWeight.Black, fontSize = 18.sp)
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(text, color = Ink, fontWeight = FontWeight.Black, fontSize = 12.sp)
-            Text("TAP FOR THE RECEIPT — THEN TAKE IT BACK", color = Ink.copy(alpha = .65f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 7.sp)
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Orange)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 22.dp, vertical = 16.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("⚡  DETHRONED", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.sp)
+            CircleActionDark("×", onDismiss)
         }
-        Text("×", color = Ink, fontSize = 20.sp, modifier = Modifier.clickable(onClick = onDismiss).padding(6.dp))
+
+        Spacer(Modifier.height(34.dp))
+        Text(
+            "THEY\nTOOK\nONE.",
+            color = Ink,
+            fontWeight = FontWeight.Black,
+            fontSize = 60.sp,
+            lineHeight = 51.sp,
+            letterSpacing = (-3).sp,
+        )
+        Spacer(Modifier.height(18.dp))
+        Text(
+            text.uppercase(),
+            color = Ink,
+            fontFamily = mono,
+            fontWeight = FontWeight.Black,
+            fontSize = 10.sp,
+            lineHeight = 15.sp,
+        )
+
+        Spacer(Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            ReceiptMetric("STATUS", "STOLEN", Modifier.weight(1f), dark = true)
+            ReceiptMetric("MOVE", "REVENGE", Modifier.weight(1f), dark = true)
+        }
+        Button(
+            onClick = onOpen,
+            colors = ButtonDefaults.buttonColors(containerColor = Ink, contentColor = Paper),
+            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier.fillMaxWidth().height(62.dp),
+        ) {
+            Text("⚡  TAKE IT BACK", fontWeight = FontWeight.Black, fontSize = 14.sp)
+        }
+        Text(
+            "OR CLOSE TO WATCH THE NEW OWNER",
+            color = Ink.copy(alpha = .68f),
+            fontFamily = mono,
+            fontWeight = FontWeight.Black,
+            fontSize = 7.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+        )
     }
 }
 
@@ -1739,6 +2083,20 @@ private fun OwnerMark(initials: String, accent: Color) {
 }
 
 @Composable
+private fun OwnerMarkLarge(initials: String, accent: Color) {
+    Box(
+        Modifier
+            .size(62.dp)
+            .clip(CircleShape)
+            .background(Ink)
+            .border(2.dp, accent, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(initials, color = accent, fontWeight = FontWeight.Black, fontSize = 19.sp)
+    }
+}
+
+@Composable
 private fun CircleAction(text: String, onClick: () -> Unit) {
     Box(Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = .06f)).border(1.dp, Color.White.copy(alpha = .08f), CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Text(text, color = Paper, fontWeight = FontWeight.Bold, fontSize = 11.sp)
@@ -1761,10 +2119,10 @@ private fun LedgerMetric(label: String, value: Int, color: Color) {
 }
 
 @Composable
-private fun ReceiptMetric(value: String, label: String) {
-    Column {
-        Text(value, color = Paper, fontWeight = FontWeight.Black, fontSize = 17.sp)
-        Text(label, color = Muted, fontFamily = mono, fontSize = 6.sp)
+private fun ReceiptMetric(value: String, label: String, modifier: Modifier = Modifier, dark: Boolean = false) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = if (dark) Ink else Paper, fontWeight = FontWeight.Black, fontSize = 17.sp)
+        Text(label, color = if (dark) Ink.copy(alpha = .62f) else Muted, fontFamily = mono, fontSize = 6.sp)
     }
 }
 
@@ -1777,7 +2135,7 @@ private fun StatusPill(text: String, color: Color) {
 
 @Composable
 private fun PrimaryButton(text: String, color: Color, onClick: () -> Unit, foreground: Color = Ink) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(54.dp), colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = foreground), shape = RoundedCornerShape(14.dp)) {
+    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = foreground), shape = RoundedCornerShape(6.dp)) {
         Text(text, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = .3.sp)
     }
 }

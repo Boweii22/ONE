@@ -121,6 +121,10 @@ class DemoOneRepository : OneRepository {
             dailyCapSeconds = AuctionRules.DAILY_REIGN_CAP_SECONDS,
             messages = initialMessages,
             hall = seededHall(),
+            hallToday = seededHall(),
+            hallAllTime = seededHall().mapIndexed { index, entry ->
+                entry.copy(rank = index + 1, reignSeconds = entry.reignSeconds * 4, verifiedViews = entry.verifiedViews * 3)
+            },
             history = emptyList(),
             takeoversToday = 1,
             currentUser = user,

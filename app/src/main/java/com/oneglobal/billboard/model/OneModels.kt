@@ -17,6 +17,7 @@ enum class Overlay {
     REPORT,
     FEEDBACK,
     DELETE_ACCOUNT,
+    HOW_IT_WORKS,
 }
 
 enum class MessageStatus {
@@ -137,9 +138,13 @@ data class WorldState(
     val reactions: List<CrowdReaction> = emptyList(),
     val currentContentBlocked: Boolean = false,
     val blockedCount: Int = 0,
+    val hallToday: List<HallEntry> = emptyList(),
+    val hallAllTime: List<HallEntry> = emptyList(),
+    val hallAllTimeLive: Boolean = false,
 )
 
 data class OneUiState(
+    val onboardingComplete: Boolean = false,
     val tab: MainTab = MainTab.LIVE,
     val overlay: Overlay = Overlay.NONE,
     val selectedMessageId: String? = null,
@@ -157,6 +162,7 @@ data class OneUiState(
     val adProgress: Float = 0f,
     val adPlaying: Boolean = false,
     val pushEnabled: Boolean = false,
+    val pushRegistered: Boolean = false,
     val takeoverPulse: Int = 0,
     val accountDeleting: Boolean = false,
     val feedbackCategory: String = "GENERAL",

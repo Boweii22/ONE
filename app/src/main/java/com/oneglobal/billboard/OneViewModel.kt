@@ -33,7 +33,11 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     val world = repository.world
     private val profilePreferences = application.getSharedPreferences("one_profile_ui", Context.MODE_PRIVATE)
 
-    private val _ui = MutableStateFlow(OneUiState())
+    private val _ui = MutableStateFlow(
+        OneUiState(
+            onboardingComplete = profilePreferences.getBoolean("onboarding_complete", false),
+        ),
+    )
     val ui: StateFlow<OneUiState> = _ui.asStateFlow()
 
     init {
@@ -100,6 +104,7 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                     OneEvent.AccountDeleted -> {
                         profilePreferences.edit().clear().apply()
                         _ui.value = OneUiState(
+                            onboardingComplete = true,
                             tab = MainTab.YOU,
                             toast = "ACCOUNT DELETED // FRESH ANONYMOUS IDENTITY CREATED",
                         )
@@ -112,6 +117,11 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectTab(tab: MainTab) {
         _ui.update { it.copy(tab = tab, overlay = Overlay.NONE) }
+    }
+
+    fun completeOnboarding() {
+        profilePreferences.edit().putBoolean("onboarding_complete", true).apply()
+        _ui.update { it.copy(onboardingComplete = true) }
     }
 
     fun openChallenge() {
@@ -310,6 +320,10 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         _ui.update { it.copy(overlay = Overlay.NONE) }
     }
 
+    fun openHowItWorks() {
+        _ui.update { it.copy(overlay = Overlay.HOW_IT_WORKS) }
+    }
+
     fun openFeedback() {
         _ui.update { it.copy(overlay = Overlay.FEEDBACK, feedbackText = "", feedbackCategory = "GENERAL", feedbackSending = false) }
     }
@@ -355,18 +369,35 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun enablePush(onRequestPermission: () -> Unit) {
-        onRequestPermission()
-        _ui.update {
-            it.copy(
-                pushEnabled = true,
-                toast = "REVENGE ALERTS ARMED",
-            )
+    fun enablePush(onRequestPermission: ((Boolean) -> Unit) -> Unit) {
+        onRequestPermission { granted ->
+            _ui.update {
+                it.copy(
+                    pushEnabled = granted,
+                    toast = if (granted) {
+                        "REVENGE ALERTS ARMED"
+                    } else {
+                        "NOTIFICATIONS ARE OFF — ENABLE THEM IN SETTINGS TO ARM ALERTS"
+                    },
+                )
+            }
         }
+    }
+
+    fun syncPushPermission(enabled: Boolean) {
+        _ui.update { it.copy(pushEnabled = enabled) }
+    }
+
+    fun syncPushRegistration(registered: Boolean) {
+        _ui.update { it.copy(pushRegistered = registered) }
     }
 
     fun dismissToast() {
         _ui.update { it.copy(toast = null) }
+    }
+
+    fun showToast(message: String) {
+        _ui.update { it.copy(toast = message) }
     }
 
     fun dismissRevenge() {

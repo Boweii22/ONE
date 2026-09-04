@@ -21,3 +21,10 @@ screenshots/
 supabase/.temp/
 one-*.png
 one-*.xml
+app/google-services.json
+*.log
+hs_err_pid*.log
+replay_pid*.log
+*.tar.gz
+hall-*.xml
+window.xml
