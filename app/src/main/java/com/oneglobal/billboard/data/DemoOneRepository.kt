@@ -407,6 +407,18 @@ class DemoOneRepository : OneRepository {
         _events.emit(OneEvent.HandleUpdated(updated.handle))
     }
 
+    override suspend fun createRecoveryCode() {
+        _events.emit(OneEvent.RecoveryCodeCreated("ONE-DEMO-${user.id.takeLast(6).uppercase()}"))
+    }
+
+    override suspend fun recoverIdentity(handle: String, code: String) {
+        _events.emit(OneEvent.IdentityRejected("Identity recovery requires the live ONE backend."))
+    }
+
+    override suspend fun reclaimUnclaimedHandle(handle: String) {
+        _events.emit(OneEvent.IdentityRejected("Handle reclaiming requires the live ONE backend."))
+    }
+
     override suspend fun submitFeedback(category: String, text: String) {
         _events.emit(OneEvent.Error("Feedback requires the live ONE backend."))
     }

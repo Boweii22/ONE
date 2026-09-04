@@ -90,6 +90,28 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                     is OneEvent.HandleRejected -> _ui.update {
                         it.copy(handleSaving = false, handleError = event.reason)
                     }
+                    is OneEvent.RecoveryCodeCreated -> {
+                        val userId = world.value.currentUserId
+                        if (userId.isNotBlank()) {
+                            profilePreferences.edit().putString("recovery_code_$userId", event.code).commit()
+                        }
+                        _ui.update {
+                            it.copy(recoveryCode = event.code, identityBusy = false, identityError = null)
+                        }
+                    }
+                    is OneEvent.IdentityRecovered -> _ui.update {
+                        it.copy(
+                            overlay = Overlay.NONE,
+                            identityBusy = false,
+                            identityError = null,
+                            recoveryHandle = "",
+                            recoveryCodeInput = "",
+                            toast = "${event.handle} IS YOURS AGAIN",
+                        )
+                    }
+                    is OneEvent.IdentityRejected -> _ui.update {
+                        it.copy(identityBusy = false, identityError = event.reason)
+                    }
                     is OneEvent.CreditsGranted -> _ui.update {
                         it.copy(toast = "+${event.amount} CREDITS // ${event.source}")
                     }
@@ -318,6 +340,58 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     fun report(reason: String) {
         repository.reportCurrentMessage(reason)
         _ui.update { it.copy(overlay = Overlay.NONE) }
+    }
+
+    fun openIdentityBackup() {
+        val userId = world.value.currentUserId
+        _ui.update {
+            it.copy(
+                overlay = Overlay.IDENTITY,
+                recoveryCode = userId.takeIf(String::isNotBlank)
+                    ?.let { id -> profilePreferences.getString("recovery_code_$id", null) },
+                recoveryHandle = "",
+                recoveryCodeInput = "",
+                identityBusy = false,
+                identityError = null,
+            )
+        }
+    }
+
+    fun createRecoveryCode() {
+        if (_ui.value.identityBusy || _ui.value.recoveryCode != null) return
+        _ui.update { it.copy(identityBusy = true, identityError = null) }
+        viewModelScope.launch { repository.createRecoveryCode() }
+    }
+
+    fun updateRecoveryHandle(value: String) {
+        _ui.update { it.copy(recoveryHandle = value.removePrefix("@").uppercase(), identityError = null) }
+    }
+
+    fun updateRecoveryCode(value: String) {
+        _ui.update { it.copy(recoveryCodeInput = value.uppercase(), identityError = null) }
+    }
+
+    fun recoverIdentity() {
+        if (_ui.value.identityBusy) return
+        val handle = AuctionRules.normalizeHandle(_ui.value.recoveryHandle)
+        val code = _ui.value.recoveryCodeInput.trim()
+        if (AuctionRules.validateHandle(handle) != null || code.length < 10) {
+            _ui.update { it.copy(identityError = "Enter the handle and the recovery code exactly as saved.") }
+            return
+        }
+        _ui.update { it.copy(identityBusy = true, identityError = null) }
+        viewModelScope.launch { repository.recoverIdentity(handle, code) }
+    }
+
+    fun reclaimUnclaimedHandle() {
+        if (_ui.value.identityBusy) return
+        val handle = AuctionRules.normalizeHandle(_ui.value.recoveryHandle)
+        if (AuctionRules.validateHandle(handle) != null) {
+            _ui.update { it.copy(identityError = "Enter the old handle you want to reclaim.") }
+            return
+        }
+        _ui.update { it.copy(identityBusy = true, identityError = null) }
+        viewModelScope.launch { repository.reclaimUnclaimedHandle(handle) }
     }
 
     fun openHowItWorks() {

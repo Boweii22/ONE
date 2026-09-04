@@ -230,6 +230,37 @@ class CloudOneRepository(context: Context) : OneRepository {
         }.onFailure { _events.emit(OneEvent.HandleRejected(it.userMessage())) }
     }
 
+    override suspend fun createRecoveryCode() {
+        runCatching {
+            val result = rpc("create_recovery_code", JSONObject(), authenticated = true)
+            _events.emit(OneEvent.RecoveryCodeCreated(result.getString("recovery_code")))
+        }.onFailure { _events.emit(OneEvent.IdentityRejected(it.userMessage())) }
+    }
+
+    override suspend fun recoverIdentity(handle: String, code: String) {
+        runCatching {
+            val result = rpc(
+                "recover_identity",
+                JSONObject().put("p_handle", handle).put("p_code", code),
+                authenticated = true,
+            )
+            refreshWorld()
+            _events.emit(OneEvent.IdentityRecovered(result.getString("handle")))
+        }.onFailure { _events.emit(OneEvent.IdentityRejected(it.userMessage())) }
+    }
+
+    override suspend fun reclaimUnclaimedHandle(handle: String) {
+        runCatching {
+            val result = rpc(
+                "reclaim_unclaimed_handle",
+                JSONObject().put("p_handle", handle),
+                authenticated = true,
+            )
+            refreshWorld()
+            _events.emit(OneEvent.IdentityRecovered(result.getString("handle")))
+        }.onFailure { _events.emit(OneEvent.IdentityRejected(it.userMessage())) }
+    }
+
     override suspend fun submitFeedback(category: String, text: String) {
         runCatching {
             rpc(
@@ -294,6 +325,7 @@ class CloudOneRepository(context: Context) : OneRepository {
         val storedAccess = preferences.getString("access_token", null)
         val storedRefresh = preferences.getString("refresh_token", null)
         if (!storedAccess.isNullOrBlank()) return AuthSession(storedAccess, storedRefresh.orEmpty())
+        if (!storedRefresh.isNullOrBlank()) return@withLock refreshSessionLocked(storedRefresh)
 
         val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/signup", "POST", null)
         connection.outputStream.use { it.write("{}".toByteArray()) }
@@ -305,21 +337,34 @@ class CloudOneRepository(context: Context) : OneRepository {
     private suspend fun refreshSession(): AuthSession = authMutex.withLock {
         val refresh = preferences.getString("refresh_token", null)
             ?: throw ApiException(401, "Missing refresh token.")
+        refreshSessionLocked(refresh)
+    }
+
+    private fun refreshSessionLocked(refresh: String): AuthSession {
         val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/token?grant_type=refresh_token", "POST", null)
         connection.outputStream.use { stream ->
             stream.write(JSONObject().put("refresh_token", refresh).toString().toByteArray())
         }
         val payload = connection.readJson()
         if (connection.responseCode !in 200..299) {
-            preferences.edit().clear().apply()
+            // Never turn a temporary backend failure into an identity loss. Only remove
+            // a stored session when Supabase explicitly rejects the refresh credential.
+            if (connection.responseCode in listOf(400, 401, 403)) preferences.edit().clear().commit()
             throw ApiException(connection.responseCode, "Session refresh failed.")
         }
-        persistSession(payload)
+        return persistSession(payload)
     }
 
     private fun persistSession(payload: JSONObject): AuthSession {
         val session = AuthSession(payload.getString("access_token"), payload.optString("refresh_token"))
-        preferences.edit().putString("access_token", session.accessToken).putString("refresh_token", session.refreshToken).apply()
+        // A synchronous commit is intentional: this identity must survive a process kill
+        // immediately after sign-in and every normal Play Store update.
+        check(
+            preferences.edit()
+                .putString("access_token", session.accessToken)
+                .putString("refresh_token", session.refreshToken)
+                .commit(),
+        ) { "Unable to persist anonymous ONE session." }
         return session
     }
 
@@ -485,6 +530,9 @@ class CloudOneRepository(context: Context) : OneRepository {
         is ApiException -> when {
             message?.contains("HANDLE_RESERVED") == true -> "That handle is protected. Choose an original alias."
             message?.contains("HANDLE_ALREADY_TAKEN") == true -> "That handle already belongs to someone."
+            message?.contains("RECOVERY_CODE_ALREADY_CREATED") == true -> "A recovery code already exists. Use the one you saved."
+            message?.contains("RECOVERY_CODE_INVALID") == true -> "That recovery code does not match this handle."
+            message?.contains("RECOVERY_NOT_AVAILABLE") == true -> "This identity cannot be recovered with that code."
             message?.contains("HANDLE_MUST_BE_3_TO_18_CHARACTERS") == true -> "Use 3 to 18 characters."
             message?.contains("CANNOT_BLOCK_YOURSELF") == true -> "You cannot block your own live reign."
             message?.contains("CANNOT_BLOCK_ONE") == true -> "The system screen cannot be blocked."

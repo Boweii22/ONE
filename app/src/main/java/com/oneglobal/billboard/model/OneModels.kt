@@ -16,6 +16,7 @@ enum class Overlay {
     VAULT,
     REPORT,
     FEEDBACK,
+    IDENTITY,
     DELETE_ACCOUNT,
     HOW_IT_WORKS,
 }
@@ -168,6 +169,11 @@ data class OneUiState(
     val feedbackCategory: String = "GENERAL",
     val feedbackText: String = "",
     val feedbackSending: Boolean = false,
+    val recoveryCode: String? = null,
+    val recoveryHandle: String = "",
+    val recoveryCodeInput: String = "",
+    val identityBusy: Boolean = false,
+    val identityError: String? = null,
 )
 
 sealed interface OneEvent {
@@ -177,6 +183,9 @@ sealed interface OneEvent {
     data class MessageRejected(val reason: String) : OneEvent
     data class HandleUpdated(val handle: String) : OneEvent
     data class HandleRejected(val reason: String) : OneEvent
+    data class RecoveryCodeCreated(val code: String) : OneEvent
+    data class IdentityRecovered(val handle: String) : OneEvent
+    data class IdentityRejected(val reason: String) : OneEvent
     data class CreditsGranted(val amount: Int, val source: String) : OneEvent
     data object FeedbackSubmitted : OneEvent
     data object AccountDeleted : OneEvent

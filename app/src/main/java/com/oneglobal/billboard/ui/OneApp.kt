@@ -218,6 +218,7 @@ fun OneApp(
                     onEnablePush = { viewModel.enablePush(onRequestPush) },
                     onShareONE = onShareONE,
                     onEditHandle = viewModel::openHandleEditor,
+                    onIdentityBackup = viewModel::openIdentityBackup,
                     onOpenPrivacy = onOpenPrivacy,
                     onFeedback = viewModel::openFeedback,
                     onUnblockAll = viewModel::unblockAll,
@@ -288,6 +289,15 @@ fun OneApp(
                     onSubmit = viewModel::submitHandle,
                     onKeepAnonymous = viewModel::dismissHandleEditor,
                     onClose = viewModel::dismissHandleEditor,
+                )
+                Overlay.IDENTITY -> IdentityOverlay(
+                    ui = ui,
+                    onClose = viewModel::closeOverlay,
+                    onCreateCode = viewModel::createRecoveryCode,
+                    onHandleChanged = viewModel::updateRecoveryHandle,
+                    onCodeChanged = viewModel::updateRecoveryCode,
+                    onRecover = viewModel::recoverIdentity,
+                    onReclaim = viewModel::reclaimUnclaimedHandle,
                 )
                 Overlay.COMPOSE -> ComposeOverlay(
                     ui = ui,
@@ -808,6 +818,7 @@ private fun YouScreen(
     onEnablePush: () -> Unit,
     onShareONE: () -> Unit,
     onEditHandle: () -> Unit,
+    onIdentityBackup: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onFeedback: () -> Unit,
     onUnblockAll: () -> Unit,
@@ -868,6 +879,14 @@ private fun YouScreen(
             },
             accent = Orange,
             onClick = onEnablePush,
+        )
+        Spacer(Modifier.height(10.dp))
+        SettingsCard(
+            title = "IDENTITY BACKUP",
+            detail = "Create a private recovery code so your handle and history can survive a lost session.",
+            badge = "SAVE",
+            accent = Acid,
+            onClick = onIdentityBackup,
         )
         Spacer(Modifier.height(10.dp))
         SettingsCard(
@@ -1104,6 +1123,92 @@ private fun RuleCard(index: String, icon: String, title: String, detail: String,
         Column(Modifier.weight(1f)) {
             Text("$index / $title", color = Paper, fontWeight = FontWeight.Black, fontSize = 16.sp)
             Text(detail, color = Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun IdentityOverlay(
+    ui: OneUiState,
+    onClose: () -> Unit,
+    onCreateCode: () -> Unit,
+    onHandleChanged: (String) -> Unit,
+    onCodeChanged: (String) -> Unit,
+    onRecover: () -> Unit,
+    onReclaim: () -> Unit,
+) {
+    val canRecover = ui.recoveryHandle.length >= AuctionRules.HANDLE_MIN && ui.recoveryCodeInput.length >= 10
+    Box(Modifier.fillMaxSize().background(Ink)) {
+        LiveField(Acid, Modifier.fillMaxSize().graphicsLayer { alpha = .24f })
+        Column(
+            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                .verticalScroll(rememberScrollState()).padding(20.dp),
+        ) {
+            OverlayHeader("IDENTITY", "RECOVERY // PRIVATE CODE", onClose)
+            Spacer(Modifier.height(24.dp))
+            StatusPill("DO NOT LOSE YOUR NAME", Acid)
+            Spacer(Modifier.height(13.dp))
+            Text("KEEP YOUR\nPLACE IN ONE.", color = Paper, fontWeight = FontWeight.Black, fontSize = 39.sp, lineHeight = 37.sp, letterSpacing = (-1.5).sp)
+            Text("Your alias, Hall history and tickets are attached to this anonymous account. Create one recovery code and save it somewhere private.", color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 11.dp))
+            Spacer(Modifier.height(20.dp))
+
+            ui.recoveryCode?.let { code ->
+                Surface(color = Acid.copy(alpha = .1f), shape = RoundedCornerShape(17.dp), border = BorderStroke(1.dp, Acid.copy(alpha = .52f))) {
+                    Column(Modifier.fillMaxWidth().padding(17.dp)) {
+                        Text("YOUR RECOVERY CODE", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
+                        Text(code, color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.padding(top = 10.dp))
+                        Text("Save it off this phone. Anyone with this code can recover this identity.", color = Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 13.sp, modifier = Modifier.padding(top = 10.dp))
+                    }
+                }
+            } ?: Button(
+                onClick = onCreateCode,
+                enabled = !ui.identityBusy,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink),
+                shape = RoundedCornerShape(14.dp),
+            ) { Text(if (ui.identityBusy) "CREATING BACKUP..." else "CREATE MY RECOVERY CODE", fontWeight = FontWeight.Black, fontSize = 11.sp) }
+
+            ui.identityError?.let { Spacer(Modifier.height(10.dp)); ErrorStrip(it) }
+            Spacer(Modifier.height(26.dp))
+            Text("LOST YOUR IDENTITY?", color = Ice, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.sp)
+            Text("Use the handle and recovery code you saved to attach that identity to this installation.", color = Muted, fontFamily = mono, fontSize = 9.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 7.dp, bottom = 11.dp))
+            IdentityInput("OLD HANDLE", "B0WEI", ui.recoveryHandle, onHandleChanged, prefix = "@")
+            Spacer(Modifier.height(10.dp))
+            IdentityInput("RECOVERY CODE", "ONE-XXXX-XXXX-XXXX", ui.recoveryCodeInput, onCodeChanged)
+            Spacer(Modifier.height(13.dp))
+            Button(
+                onClick = onRecover,
+                enabled = canRecover && !ui.identityBusy,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Ice, contentColor = Ink, disabledContainerColor = Color.White.copy(alpha = .08f), disabledContentColor = Muted),
+                shape = RoundedCornerShape(14.dp),
+            ) { Text(if (ui.identityBusy) "VERIFYING..." else "RECOVER THIS IDENTITY", fontWeight = FontWeight.Black, fontSize = 10.sp) }
+            Spacer(Modifier.height(10.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth().clickable(enabled = ui.recoveryHandle.length >= AuctionRules.HANDLE_MIN && !ui.identityBusy, onClick = onReclaim),
+                color = Color.Transparent,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, Orange.copy(alpha = .55f)),
+            ) {
+                Text("RECLAIM UNUSED GHOST ALIAS", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(15.dp))
+            }
+            Spacer(Modifier.height(16.dp))
+            Text("Reclaim only works for a two-week-old unused shell with no history, purchases or recovery code. Real identities always require their private recovery code.", color = Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 13.sp)
+        }
+    }
+}
+
+@Composable
+private fun IdentityInput(label: String, placeholder: String, value: String, onChange: (String) -> Unit, prefix: String = "") {
+    Column {
+        Text(label, color = Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
+        Spacer(Modifier.height(6.dp))
+        Row(Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(13.dp)).background(InkRaised).border(1.dp, Color.White.copy(alpha = .18f), RoundedCornerShape(13.dp)).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (prefix.isNotEmpty()) Text(prefix, color = Acid, fontWeight = FontWeight.Black, fontSize = 17.sp)
+            Box(Modifier.weight(1f)) {
+                if (value.isEmpty()) Text(placeholder, color = Muted.copy(alpha = .45f), fontFamily = mono, fontSize = 12.sp)
+                BasicTextField(value = value, onValueChange = onChange, textStyle = TextStyle(color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp), singleLine = true, cursorBrush = Brush.verticalGradient(listOf(Acid, Acid)), modifier = Modifier.fillMaxWidth())
+            }
         }
     }
 }
