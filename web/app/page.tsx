@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Check, Clock3, Eye, Radio, Share2, ShieldCheck, Swords, Users } from 'lucide-react';
+import Image from 'next/image';
+import { ArrowDown, ArrowRight, Check, Clock3, Eye, Radio, Share2, ShieldCheck, Sparkles, Swords, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type Activity = {
@@ -182,13 +183,12 @@ export default function Home() {
 
   const submitTesterInterest = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!SUPABASE_URL || !SUPABASE_KEY) return setTesterStatus('error');
     setTesterStatus('sending');
     try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/tester_interest`, {
+      const response = await fetch('/api/tester', {
         method: 'POST',
-        headers: { apikey: SUPABASE_KEY, authorization: `Bearer ${SUPABASE_KEY}`, 'content-type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({ email: testerForm.email.trim().toLowerCase(), name: testerForm.name.trim() || null, device: testerForm.device, source: 'one_public_spectator' }),
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...testerForm, company: '' }),
       });
       if (!response.ok) throw new Error('tester_interest_failed');
       setTesterStatus('sent');
@@ -205,6 +205,29 @@ export default function Home() {
         <Button variant="outline" className="share-button" onClick={() => void share()}><Share2 /> Share reign</Button>
       </header>
 
+      <section className="launch-hero">
+        <div className="hero-orbit orbit-one" aria-hidden="true" />
+        <div className="hero-orbit orbit-two" aria-hidden="true" />
+        <div className="hero-copy">
+          <div className="eyebrow"><span>01</span> A SOCIAL GAME PLAYED IN PUBLIC</div>
+          <h1>THE INTERNET<br />HAS <em>ONE</em><br />SCREEN.</h1>
+          <p>One person owns it. Everyone sees it. Anyone can steal it. Your words, in front of the world—until somebody takes your place.</p>
+          <div className="hero-actions">
+            <a className="primary-cta" href="#join">JOIN THE CLOSED TEST <ArrowRight /></a>
+            <a className="ghost-cta" href="#live">WATCH IT LIVE <ArrowDown /></a>
+          </div>
+          <div className="hero-proof"><b>BUILT FOR ANDROID</b><span /><b>REAL PEOPLE</b><span /><b>ONE GLOBAL STAGE</b></div>
+        </div>
+        <div className="phone-theatre" aria-label="ONE app previews">
+          <div className="phone-card phone-back"><Image src="/screens/one-stolen.png" alt="ONE stolen screen" fill priority sizes="(max-width: 900px) 42vw, 260px" /></div>
+          <div className="phone-card phone-front"><Image src="/screens/one-live.png" alt="ONE live global screen" fill priority sizes="(max-width: 900px) 52vw, 320px" /></div>
+          <div className="signal-badge"><Radio /><span>THE WORLD<br />IS WATCHING</span></div>
+        </div>
+        <div className="hero-index" aria-hidden="true">001 / ∞</div>
+      </section>
+
+      <section id="live" className="live-wrapper">
+        <div className="section-intro"><span>LIVE / RIGHT NOW</span><h2>DON'T TAKE OUR<br />WORD FOR IT.</h2><p>This is the actual global screen. No mock data. No polite little demo.</p></div>
       {state ? (
         <div className="stage-layout">
           <section className="live-stage" aria-live="polite">
@@ -253,8 +276,33 @@ export default function Home() {
           <small>{status === 'unconfigured' ? 'Set the Supabase public URL and key to begin the founding reign.' : 'No simulated audience. No fake numbers.'}</small>
         </section>
       )}
+      </section>
 
-      <section className="tester-section" aria-labelledby="tester-title">
+      <section className="mechanics">
+        <div className="mechanics-heading"><span>HOW ONE WORKS</span><h2>THREE MOVES.<br />ZERO HIDING.</h2></div>
+        <div className="mechanic-grid">
+          <article><b>01</b><div className="mechanic-icon"><Eye /></div><h3>WATCH</h3><p>The whole world sees the same message, at the same time. No feeds. No algorithm. Just ONE.</p></article>
+          <article className="acid-card"><b>02</b><div className="mechanic-icon"><Zap /></div><h3>TAKE IT</h3><p>Challenge the owner. Win the screen. Put your words where everyone can see them.</p></article>
+          <article><b>03</b><div className="mechanic-icon"><Swords /></div><h3>DEFEND</h3><p>Your reign is public. Your timer is running. Hold the screen—or watch somebody steal it.</p></article>
+        </div>
+      </section>
+
+      <section className="screen-reel" aria-label="Inside the ONE app">
+        <div className="reel-track">
+          {['one-words.png','one-takeover.png','one-proof.png','one-hall.png','one-stolen.png'].map((image, index) => (
+            <figure key={image}><Image src={`/screens/${image}`} alt={`ONE app experience ${index + 1}`} fill sizes="(max-width: 700px) 72vw, 330px" /><figcaption>0{index + 1} / ONE</figcaption></figure>
+          ))}
+        </div>
+      </section>
+
+      <section className="manifesto">
+        <div className="manifesto-mark"><Image src="/one-app-icon.png" alt="ONE app icon" fill sizes="180px" /></div>
+        <p><span>NO FOLLOWERS.</span> NO INFINITE SCROLL. NO PRIVATE LITTLE BUBBLES.</p>
+        <h2>JUST ONE PLACE<br />TO BE <em>SEEN.</em></h2>
+        <div className="manifesto-note"><Sparkles /> Founding users will shape the rules, culture and chaos of ONE.</div>
+      </section>
+
+      <section id="join" className="tester-section" aria-labelledby="tester-title">
         <div className="tester-copy">
           <span className="section-kicker">ANDROID CLOSED TEST</span>
           <h1 id="tester-title">DON&apos;T JUST WATCH THE SCREEN.<br /><em>TRY TO TAKE IT.</em></h1>
