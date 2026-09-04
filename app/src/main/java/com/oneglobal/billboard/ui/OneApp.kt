@@ -491,8 +491,13 @@ private fun LiveScreen(
                 }
             }
             Box(Modifier.fillMaxWidth().padding(vertical = 17.dp).height(1.dp).background(Color.White.copy(alpha = .16f)))
-            MessageStage(message = world.reign.message.text, accent = accent)
-            Spacer(Modifier.weight(1f))
+            LiveMapMessageStage(
+                message = world.reign.message.text,
+                accent = accent,
+                connected = world.connected,
+                city = world.reign.owner.city,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
             ViewLedger(world, accent, protectedSeconds)
             Spacer(Modifier.height(12.dp))
             AuctionCard(
@@ -525,6 +530,58 @@ private fun LiveHeader(world: WorldState, accent: Color, onShare: () -> Unit, on
             Spacer(Modifier.width(7.dp))
             CircleAction("⋮", onReport)
         }
+    }
+}
+
+@Composable
+private fun LiveMapMessageStage(
+    message: String,
+    accent: Color,
+    connected: Boolean,
+    city: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier.clip(RoundedCornerShape(7.dp))) {
+        WorldMapBackdrop(accent, Modifier.fillMaxSize())
+        Row(
+            Modifier.fillMaxWidth().align(Alignment.TopStart).padding(top = 13.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(if (connected) "GLOBAL SIGNAL // LIVE" else "GLOBAL SIGNAL // RECONNECTING", color = if (connected) accent else Orange, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 7.sp, letterSpacing = .8.sp)
+            Text(city.uppercase(), color = Paper.copy(alpha = .48f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 7.sp)
+        }
+        Box(Modifier.fillMaxWidth().align(Alignment.BottomStart).padding(bottom = 17.dp)) {
+            MessageStage(message = message, accent = accent)
+        }
+    }
+}
+
+@Composable
+private fun WorldMapBackdrop(accent: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        // Deliberately a map illustration, not a fabricated location claim. The live
+        // owner city and all metrics shown above/below come from the server state.
+        val clusters = listOf(
+            listOf(.08f to .30f, .14f to .23f, .23f to .20f, .31f to .27f, .28f to .38f, .18f to .43f, .10f to .40f),
+            listOf(.37f to .30f, .46f to .22f, .58f to .24f, .65f to .34f, .60f to .44f, .48f to .40f, .39f to .48f),
+            listOf(.68f to .58f, .79f to .52f, .91f to .58f, .94f to .69f, .83f to .76f, .73f to .69f),
+            listOf(.28f to .61f, .38f to .56f, .43f to .66f, .40f to .80f, .31f to .78f),
+        )
+        repeat(27) { row ->
+            repeat(46) { column ->
+                val x = (column + .5f) / 46f
+                val y = (row + .5f) / 27f
+                val inCluster = clusters.any { points ->
+                    points.any { (cx, cy) -> (x - cx) * (x - cx) * 1.7f + (y - cy) * (y - cy) < .0085f }
+                }
+                if (inCluster && (row * 13 + column * 7) % 3 != 0) {
+                    drawCircle(accent.copy(alpha = .12f), 1.15.dp.toPx(), Offset(x * size.width, y * size.height))
+                }
+            }
+        }
+        drawLine(accent.copy(alpha = .22f), Offset(size.width * .15f, size.height * .36f), Offset(size.width * .78f, size.height * .62f), strokeWidth = 1.dp.toPx())
+        drawCircle(accent.copy(alpha = .75f), 3.dp.toPx(), Offset(size.width * .78f, size.height * .62f))
     }
 }
 
@@ -998,6 +1055,8 @@ private fun ChallengeOverlay(
                 ChallengeChoice("ϟ", "FREE STEAL", "Fastest path. Ready after cooldown.", if (needsTicket) "${world.cooldownRemainingSeconds}s" else "READY", Acid, selected = !needsTicket)
                 Spacer(Modifier.height(10.dp))
                 ChallengeChoice("🎟", "REVENGE TICKET", "Skip the cooldown. Spent only if you win.", "${world.credits} LEFT", Ice, selected = needsTicket && world.credits > 0, onClick = if (world.credits == 0) onOpenVault else null)
+                Spacer(Modifier.height(10.dp))
+                ChallengeChoice("LIVE", "LIVE CHALLENGE", "Hold to submit an atomic server-verified takeover.", "ATOMIC", Orange, selected = false)
                 Spacer(Modifier.height(16.dp))
                 Text("YOUR APPROVED MESSAGE", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = .7.sp)
                 Spacer(Modifier.height(8.dp))
