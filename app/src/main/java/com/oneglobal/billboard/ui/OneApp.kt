@@ -23,6 +23,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -79,12 +80,14 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -96,6 +99,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.oneglobal.billboard.OneViewModel
+import com.oneglobal.billboard.R
 import com.oneglobal.billboard.data.AuctionRules
 import com.oneglobal.billboard.model.ChallengePhase
 import com.oneglobal.billboard.model.HallEntry
@@ -510,10 +514,6 @@ private fun LiveScreen(
             Spacer(Modifier.height(14.dp))
             CrowdControls(world, onReact, onEcho)
         }
-
-        if (ui.challengePhase == ChallengePhase.WON && ui.overlay == Overlay.CHALLENGE) {
-            TakeoverFlash(Modifier.fillMaxSize())
-        }
     }
 }
 
@@ -542,7 +542,13 @@ private fun LiveMapMessageStage(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.clip(RoundedCornerShape(7.dp))) {
-        WorldMapBackdrop(accent, Modifier.fillMaxSize())
+        Image(
+            painter = painterResource(R.drawable.one_world_map_halftone),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            alpha = .24f,
+            modifier = Modifier.fillMaxSize().padding(top = 10.dp),
+        )
         Row(
             Modifier.fillMaxWidth().align(Alignment.TopStart).padding(top = 13.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -554,34 +560,6 @@ private fun LiveMapMessageStage(
         Box(Modifier.fillMaxWidth().align(Alignment.BottomStart).padding(bottom = 17.dp)) {
             MessageStage(message = message, accent = accent)
         }
-    }
-}
-
-@Composable
-private fun WorldMapBackdrop(accent: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        // Deliberately a map illustration, not a fabricated location claim. The live
-        // owner city and all metrics shown above/below come from the server state.
-        val clusters = listOf(
-            listOf(.08f to .30f, .14f to .23f, .23f to .20f, .31f to .27f, .28f to .38f, .18f to .43f, .10f to .40f),
-            listOf(.37f to .30f, .46f to .22f, .58f to .24f, .65f to .34f, .60f to .44f, .48f to .40f, .39f to .48f),
-            listOf(.68f to .58f, .79f to .52f, .91f to .58f, .94f to .69f, .83f to .76f, .73f to .69f),
-            listOf(.28f to .61f, .38f to .56f, .43f to .66f, .40f to .80f, .31f to .78f),
-        )
-        repeat(27) { row ->
-            repeat(46) { column ->
-                val x = (column + .5f) / 46f
-                val y = (row + .5f) / 27f
-                val inCluster = clusters.any { points ->
-                    points.any { (cx, cy) -> (x - cx) * (x - cx) * 1.7f + (y - cy) * (y - cy) < .0085f }
-                }
-                if (inCluster && (row * 13 + column * 7) % 3 != 0) {
-                    drawCircle(accent.copy(alpha = .12f), 1.15.dp.toPx(), Offset(x * size.width, y * size.height))
-                }
-            }
-        }
-        drawLine(accent.copy(alpha = .22f), Offset(size.width * .15f, size.height * .36f), Offset(size.width * .78f, size.height * .62f), strokeWidth = 1.dp.toPx())
-        drawCircle(accent.copy(alpha = .75f), 3.dp.toPx(), Offset(size.width * .78f, size.height * .62f))
     }
 }
 
@@ -851,7 +829,11 @@ private fun HallScreen(world: WorldState) {
                         Text("The first verified reign will appear here.", color = Muted, fontFamily = mono, fontSize = 8.sp, modifier = Modifier.padding(top = 5.dp))
                     }
                 } else {
-                    visibleEntries.forEach { entry -> HallRow(entry, entry.owner.id == world.currentUserId) }
+                    visibleEntries.forEach { entry ->
+                        val isCurrentUser = entry.owner.id == world.currentUserId
+                        if (isCurrentUser) YourRankDivider()
+                        HallRow(entry, isCurrentUser)
+                    }
                 }
             }
         }
@@ -1477,7 +1459,7 @@ private fun ReceiptOverlay(
                 Box(Modifier.width(1.dp).height(48.dp).background(Color.White.copy(alpha = .14f)))
                 ReceiptMetric(formatNumber(total), "VERIFIED VIEWS", Modifier.weight(1f))
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(28.dp))
             PrimaryButton(if (stillOwner) "GO LIVE  ((•))" else "WATCH LIVE", Acid, onClose)
             Spacer(Modifier.height(10.dp))
             Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onShare), color = Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .18f))) {
@@ -2005,18 +1987,54 @@ private fun HallHero(entry: HallEntry) {
 @Composable
 private fun HallRow(entry: HallEntry, isCurrentUser: Boolean = false) {
     val rankColor = when (entry.rank) { 1 -> Acid; 2 -> Ice; 3 -> Orange; else -> Muted }
-    Row(Modifier.fillMaxWidth().height(70.dp).background(if (isCurrentUser) Acid else Color.Transparent).border(0.5.dp, Color.White.copy(alpha = .08f)).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(entry.rank.toString(), color = if (isCurrentUser) Ink else rankColor, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.width(28.dp))
-        Box(Modifier.size(36.dp).clip(CircleShape).background(if (isCurrentUser) Ink else rankColor.copy(alpha = .18f)), contentAlignment = Alignment.Center) {
-            Text(entry.owner.initials, color = if (isCurrentUser) Acid else rankColor, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
+    Box(Modifier.fillMaxWidth().height(70.dp)) {
+        if (isCurrentUser) {
+            Canvas(Modifier.fillMaxSize()) {
+                val tooth = 7.dp.toPx()
+                val path = Path().apply {
+                    moveTo(0f, tooth)
+                    var x = 0f
+                    var high = true
+                    while (x < size.width) {
+                        lineTo(x, if (high) 0f else tooth)
+                        x += tooth
+                        high = !high
+                    }
+                    lineTo(size.width, size.height - tooth)
+                    high = false
+                    x = size.width
+                    while (x > 0f) {
+                        lineTo(x, if (high) size.height else size.height - tooth)
+                        x -= tooth
+                        high = !high
+                    }
+                    close()
+                }
+                drawPath(path, Acid)
+            }
         }
-        Spacer(Modifier.width(9.dp))
-        Column(Modifier.weight(1f)) {
-            Text(entry.owner.handle, color = if (isCurrentUser) Ink else Paper, fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1)
-            Text("${entry.owner.city.uppercase()}, ${entry.owner.countryCode}", color = if (isCurrentUser) Ink.copy(alpha = .65f) else Muted, fontFamily = mono, fontSize = 6.sp)
+        Row(Modifier.fillMaxSize().border(0.5.dp, Color.White.copy(alpha = .08f)).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(entry.rank.toString(), color = if (isCurrentUser) Ink else rankColor, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.width(28.dp))
+            Box(Modifier.size(36.dp).clip(CircleShape).background(if (isCurrentUser) Ink else rankColor.copy(alpha = .18f)), contentAlignment = Alignment.Center) {
+                Text(entry.owner.initials, color = if (isCurrentUser) Acid else rankColor, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
+            }
+            Spacer(Modifier.width(9.dp))
+            Column(Modifier.weight(1f)) {
+                Text(entry.owner.handle, color = if (isCurrentUser) Ink else Paper, fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1)
+                Text("${entry.owner.city.uppercase()}, ${entry.owner.countryCode}", color = if (isCurrentUser) Ink.copy(alpha = .65f) else Muted, fontFamily = mono, fontSize = 6.sp)
+            }
+            Text(formatDuration(entry.reignSeconds.toLong()), color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, modifier = Modifier.width(70.dp), textAlign = TextAlign.End)
+            Text(formatNumber(entry.verifiedViews), color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, modifier = Modifier.width(62.dp), textAlign = TextAlign.End)
         }
-        Text(formatDuration(entry.reignSeconds.toLong()), color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, modifier = Modifier.width(70.dp), textAlign = TextAlign.End)
-        Text(formatNumber(entry.verifiedViews), color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, modifier = Modifier.width(62.dp), textAlign = TextAlign.End)
+    }
+}
+
+@Composable
+private fun YourRankDivider() {
+    Row(Modifier.fillMaxWidth().padding(top = 13.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f).height(1.dp).background(Acid.copy(alpha = .55f)))
+        Text("YOUR RANK", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 7.sp, letterSpacing = 1.sp, modifier = Modifier.padding(horizontal = 10.dp))
+        Box(Modifier.weight(1f).height(1.dp).background(Acid.copy(alpha = .55f)))
     }
 }
 
@@ -2083,24 +2101,29 @@ private fun SettingsCard(title: String, detail: String, badge: String, accent: C
 
 @Composable
 private fun CreditPack(icon: String, name: String, amount: Int, price: String, color: Color, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(104.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(color)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(icon, color = Ink, fontWeight = FontWeight.Black, fontSize = 34.sp)
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Text(name, color = Ink, fontWeight = FontWeight.Black, fontSize = 20.sp)
-            Text("${formatNumber(amount)} TICKETS", color = Ink.copy(alpha = .76f), fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp))
+    Box(Modifier.fillMaxWidth().height(104.dp).clickable(onClick = onClick)) {
+        Row(
+            Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)).background(color).padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(icon, color = Ink, fontWeight = FontWeight.Black, fontSize = 34.sp)
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, color = Ink, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                Text("${formatNumber(amount)} TICKETS", color = Ink.copy(alpha = .76f), fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp))
+            }
+            Canvas(Modifier.width(1.dp).height(72.dp)) {
+                val dash = 5.dp.toPx()
+                var y = 0f
+                while (y < size.height) {
+                    drawLine(Ink.copy(alpha = .34f), Offset(0f, y), Offset(0f, (y + dash).coerceAtMost(size.height)), strokeWidth = 1.dp.toPx())
+                    y += dash * 1.8f
+                }
+            }
+            Text(price, color = Ink, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.padding(start = 18.dp))
         }
-        Box(Modifier.width(1.dp).height(72.dp).background(Ink.copy(alpha = .25f)))
-        Text(price, color = Ink, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.padding(start = 18.dp))
+        Box(Modifier.size(20.dp).align(Alignment.CenterStart).offset(x = (-10).dp).background(Ink, CircleShape))
+        Box(Modifier.size(20.dp).align(Alignment.CenterEnd).offset(x = 10.dp).background(Ink, CircleShape))
     }
 }
 

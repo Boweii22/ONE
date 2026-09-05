@@ -30,8 +30,8 @@ android {
         applicationId = "com.tomribowei.one"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.0.8"
+        versionCode = 19
+        versionName = "1.0.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
