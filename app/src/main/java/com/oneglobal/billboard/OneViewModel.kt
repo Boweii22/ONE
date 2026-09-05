@@ -234,6 +234,12 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun closeOverlay() {
+        if (_ui.value.overlay == Overlay.RECEIPT &&
+            !profilePreferences.getBoolean("google_prompt_seen", false)) {
+            profilePreferences.edit().putBoolean("google_prompt_seen", true).commit()
+            openIdentityBackup()
+            return
+        }
         if (_ui.value.overlay == Overlay.HANDLE) {
             dismissHandleEditor()
             return
@@ -310,7 +316,7 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun submitHandle() {
+    fun submitHandle(country: String) {
         if (_ui.value.handleSaving) return
         val candidate = AuctionRules.normalizeHandle(_ui.value.handleText)
         val error = AuctionRules.validateHandle(candidate)
@@ -319,7 +325,14 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         _ui.update { it.copy(handleText = candidate, handleError = null, handleSaving = true) }
-        updateHandle(candidate)
+        viewModelScope.launch {
+            try {
+                repository.updateProfile("", country)
+                repository.updateHandle(candidate)
+            } catch (e: Exception) {
+                _ui.update { it.copy(handleSaving = false, handleError = "Could not save country. Please retry.") }
+            }
+        }
     }
 
     fun dismissHandleEditor() {
@@ -341,19 +354,7 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun watchRewardedAd() {
-        if (_ui.value.adPlaying) return
-        viewModelScope.launch {
-            _ui.update { it.copy(adPlaying = true, adProgress = 0f) }
-            coroutineScope {
-                val reward = async { repository.grantAdReward() }
-                repeat(12) { step ->
-                    delay(200)
-                    _ui.update { it.copy(adProgress = (step + 1) / 12f) }
-                }
-                reward.await()
-            }
-            _ui.update { it.copy(adPlaying = false, adProgress = 1f) }
-        }
+        showToast("Rewarded ads are awaiting setup. No ad has played and no reward was granted.")
     }
 
     fun grantPurchasedCredits(amount: Int) {
@@ -367,6 +368,19 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     fun report(reason: String) {
         repository.reportCurrentMessage(reason)
         _ui.update { it.copy(overlay = Overlay.NONE) }
+    }
+
+    fun googleIdentity(token: String, nonce: String, restore: Boolean) {
+        if (_ui.value.identityBusy) return
+        _ui.update { it.copy(identityBusy = true, identityError = null) }
+        viewModelScope.launch {
+            try {
+                repository.googleIdentity(token, nonce, restore)
+                _ui.update { it.copy(overlay = Overlay.NONE, toast = "Google connected. Your identity is saved.") }
+            } catch (e: Exception) {
+                _ui.update { it.copy(identityError = e.message ?: "Could not connect Google.") }
+            } finally { _ui.update { it.copy(identityBusy = false) } }
+        }
     }
 
     fun openIdentityBackup() {

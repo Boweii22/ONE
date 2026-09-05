@@ -367,6 +367,10 @@ class DemoOneRepository : OneRepository {
         _world.value = _world.value.copy(currentUser = user)
     }
 
+    override suspend fun googleIdentity(idToken: String, nonce: String, restore: Boolean) {
+        error("Google identity requires a connected account.")
+    }
+
     override suspend fun updatePhoto(jpeg: ByteArray?) {
         error("Profile photos require a connected account.")
     }

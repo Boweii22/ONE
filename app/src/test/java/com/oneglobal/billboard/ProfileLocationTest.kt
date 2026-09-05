@@ -9,14 +9,14 @@ class ProfileLocationTest {
     private fun owner(city: String, country: String) = OneOwner("id", "@TEST", city, country, false, "TE")
 
     @Test fun placeholdersAreNeverShownAsRealLocations() {
-        assertEquals("Location not shared", owner("EARTH", "XX").locationLabel())
-        assertEquals("Location not shared", owner("", "").locationLabel())
-        assertEquals("Location not shared", owner("HIDDEN", "XX").locationLabel())
+        assertEquals("Country not shared", owner("EARTH", "XX").locationLabel())
+        assertEquals("Country not shared", owner("", "").locationLabel())
+        assertEquals("Country not shared", owner("HIDDEN", "XX").locationLabel())
     }
 
     @Test fun onlyProvidedValidLocationPartsAreShown() {
-        assertEquals("London, GB", owner("London", "gb").locationLabel())
-        assertEquals("NG", owner("", "NG").locationLabel())
-        assertEquals("Lagos", owner("Lagos", "XX").locationLabel())
+        assertEquals(com.oneglobal.billboard.ui.countryLabel("GB"), owner("London", "gb").locationLabel())
+        assertEquals(com.oneglobal.billboard.ui.countryLabel("NG"), owner("", "NG").locationLabel())
+        assertEquals("Country not shared", owner("Lagos", "XX").locationLabel())
     }
 }

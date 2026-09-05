@@ -41,9 +41,7 @@ private val photos = object : LruCache<String, Bitmap>(4 * 1024) {
 }
 
 fun OneOwner.locationLabel(): String {
-    val cityLabel = city.trim().takeUnless { it.uppercase() in setOf("", "EARTH", "HIDDEN", "THE INTERNET") }
-    val country = countryCode.uppercase().takeIf { it in java.util.Locale.getISOCountries() }
-    return listOfNotNull(cityLabel, country).joinToString(", ").ifBlank { "Location not shared" }
+    return countryLabel(countryCode.uppercase(java.util.Locale.ROOT))
 }
 
 /** Decode with a size cap before allocation, respecting orientation and stripping metadata. */

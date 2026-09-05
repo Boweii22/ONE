@@ -335,11 +335,37 @@ class CloudOneRepository(context: Context) : OneRepository {
         }
     }
 
+    override suspend fun googleIdentity(idToken: String, nonce: String, restore: Boolean) = withContext(Dispatchers.IO) {
+        // The restore path is a separate, explicitly confirmed action, never a linking fallback.
+        val current = if (!restore) refreshSession() else null
+        authMutex.withLock {
+            val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/token?grant_type=id_token", "POST", current?.accessToken)
+            val body = JSONObject().put("provider", "google").put("id_token", idToken)
+                .put("nonce", nonce).put("link_identity", !restore)
+            connection.outputStream.use { it.write(body.toString().toByteArray()) }
+            val payload = connection.readJson()
+            if (connection.responseCode !in 200..299) {
+                throw IllegalStateException(if (restore) "Google restore failed. Your current session has not been changed."
+                    else "Could not link Google. It may already belong to another ONE account. Your current identity is unchanged.")
+            }
+            val returnedId = payload.getJSONObject("user").getString("id")
+            check(restore || returnedId == _world.value.currentUserId) { "Identity mismatch. Existing session retained." }
+            persistSession(payload)
+        }
+        cachedHallToday = emptyList()
+        cachedHallAllTime = emptyList()
+        hallRefreshAt = 0L
+        refreshWorld()
+    }
+
     private suspend fun ensureSession(): AuthSession = authMutex.withLock {
         val storedAccess = preferences.getString("access_token", null)
         val storedRefresh = preferences.getString("refresh_token", null)
         if (!storedAccess.isNullOrBlank()) return AuthSession(storedAccess, storedRefresh.orEmpty())
         if (!storedRefresh.isNullOrBlank()) return@withLock refreshSessionLocked(storedRefresh)
+        check(preferences.getString("user_id", null).isNullOrBlank()) {
+            "Saved identity needs recovery. ONE will not replace it with a new account."
+        }
 
         val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/signup", "POST", null)
         connection.outputStream.use { it.write("{}".toByteArray()) }
@@ -363,7 +389,7 @@ class CloudOneRepository(context: Context) : OneRepository {
         if (connection.responseCode !in 200..299) {
             // Never turn a temporary backend failure into an identity loss. Only remove
             // a stored session when Supabase explicitly rejects the refresh credential.
-            if (connection.responseCode in listOf(400, 401, 403)) preferences.edit().clear().commit()
+            // Keep the identity even when refresh is rejected. Never silently sign up again.
             throw ApiException(connection.responseCode, "Session refresh failed.")
         }
         return persistSession(payload)
@@ -377,6 +403,7 @@ class CloudOneRepository(context: Context) : OneRepository {
             preferences.edit()
                 .putString("access_token", session.accessToken)
                 .putString("refresh_token", session.refreshToken)
+                .putString("user_id", payload.optJSONObject("user")?.optString("id") ?: preferences.getString("user_id", null))
                 .commit(),
         ) { "Unable to persist anonymous ONE session." }
         return session

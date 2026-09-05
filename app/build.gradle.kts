@@ -30,13 +30,14 @@ android {
         applicationId = "com.tomribowei.one"
         minSdk = 26
         targetSdk = 36
-        versionCode = 20
-        versionName = "1.0.10"
+        versionCode = 21
+        versionName = "1.0.11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
 
         val revenueCatKey = onePublicValue("REVENUECAT_API_KEY")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"" + onePublicValue("GOOGLE_WEB_CLIENT_ID") + "\"")
         val oneSignalId = onePublicValue("ONESIGNAL_APP_ID")
         val supabaseUrl = onePublicValue("SUPABASE_URL")
         val supabaseAnonKey = onePublicValue("SUPABASE_ANON_KEY")
@@ -93,6 +94,9 @@ android {
 }
 
 dependencies {
+    implementation("androidx.credentials:credentials:1.6.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")

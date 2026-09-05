@@ -1,5 +1,8 @@
 package com.oneglobal.billboard.ui
 
+import com.oneglobal.billboard.BuildConfig
+import androidx.compose.material3.TextButton
+
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -142,6 +145,7 @@ fun OneApp(
     onRequestPush: ((Boolean) -> Unit) -> Unit,
     onShareReceipt: (ReignReceipt) -> Unit,
     onShareONE: () -> Unit,
+    onGoogle: (Boolean) -> Unit,
     onIdentifyUser: (String) -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenDeletionHelp: () -> Unit,
@@ -304,10 +308,9 @@ fun OneApp(
                 Overlay.IDENTITY -> IdentityOverlay(
                     ui = ui,
                     onClose = viewModel::closeOverlay,
-                    onCreateCode = viewModel::createRecoveryCode,
+                    handle = world.currentUser?.handle.orEmpty(),
+                    onGoogle = onGoogle,
                     onHandleChanged = viewModel::updateRecoveryHandle,
-                    onCodeChanged = viewModel::updateRecoveryCode,
-                    onRecover = viewModel::recoverIdentity,
                     onReclaim = viewModel::reclaimUnclaimedHandle,
                 )
                 Overlay.COMPOSE -> ComposeOverlay(
@@ -553,9 +556,9 @@ private fun LiveMapMessageStage(
         Image(
             painter = painterResource(R.drawable.one_world_map_halftone),
             contentDescription = null,
-            contentScale = ContentScale.Fit,
+            contentScale = ContentScale.Crop,
             alpha = .24f,
-            modifier = Modifier.fillMaxSize().padding(top = 10.dp),
+            modifier = Modifier.matchParentSize(),
         )
         Box(Modifier.fillMaxWidth().align(Alignment.CenterStart).padding(vertical = 12.dp)) {
             MessageStage(message = message, accent = accent)
@@ -595,7 +598,7 @@ private fun ViewLedger(world: WorldState, accent: Color, protectedSeconds: Int) 
             .padding(horizontal = 8.dp, vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LiveMetric("◉", "WATCHING NOW", formatNumber(world.liveWatchers), "PEOPLE", accent, Modifier.weight(1f))
+        LiveMetric("◉", "WATCHING NOW", formatNumber(world.liveWatchers), if (world.liveWatchers == 1) "PERSON" else "PEOPLE", accent, Modifier.weight(1f))
         Box(Modifier.width(1.dp).height(62.dp).background(Color.White.copy(alpha = .16f)))
         LiveMetric(
             "◷",
@@ -905,7 +908,7 @@ private fun YouScreen(
         Spacer(Modifier.height(8.dp))
         UserStatsPanel(world)
         Spacer(Modifier.height(14.dp))
-        SettingsCard("PHOTO & LOCATION", "Add a public photo and choose your location.", "EDIT", Acid, onEditProfile)
+        SettingsCard("PHOTO & COUNTRY", "Add a public photo and choose your location.", "EDIT", Acid, onEditProfile)
         Spacer(Modifier.height(14.dp))
         SettingsCard(
             title = "PUBLIC HANDLE",
@@ -929,7 +932,7 @@ private fun YouScreen(
         Spacer(Modifier.height(10.dp))
         SettingsCard(
             title = "IDENTITY BACKUP",
-            detail = "Create a private recovery code so your handle and history can survive a lost session.",
+            detail = "Link Google to keep your handle and history across devices.",
             badge = "SAVE",
             accent = Acid,
             onClick = onIdentityBackup,
@@ -957,6 +960,14 @@ private fun YouScreen(
             badge = "›",
             accent = Ice,
             onClick = onOpenPrivacy,
+        )
+        Spacer(Modifier.height(10.dp))
+        SettingsCard(
+            title = "HOW TO PLAY",
+            detail = "Watch, take the screen, publish, and build your reign.",
+            badge = "START",
+            accent = Acid,
+            onClick = onHowItWorks,
         )
         Spacer(Modifier.height(10.dp))
         SettingsCard(
@@ -993,29 +1004,22 @@ private fun YouScreen(
 @Composable
 private fun ProfileOverlay(world: WorldState, ui: OneUiState, onClose: () -> Unit, onSave: (String, String) -> Unit, onPhoto: (android.net.Uri?) -> Unit) {
     val user = world.currentUser
-    var city by rememberSaveable(user?.id) { mutableStateOf(user?.city?.takeUnless { it.uppercase() in setOf("EARTH", "THE INTERNET", "HIDDEN") }.orEmpty()) }
-    var country by rememberSaveable(user?.id) { mutableStateOf(user?.countryCode?.takeUnless { it == "XX" }.orEmpty()) }
+    var country by rememberSaveable(user?.id) { mutableStateOf(user?.countryCode?.takeIf { it in java.util.Locale.getISOCountries() }.orEmpty()) }
     var error by remember { mutableStateOf<String?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) onPhoto(uri) }
     Column(Modifier.fillMaxSize().background(Ink).statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp)) {
         OverlayHeader("YOUR PROFILE", "PHOTO & LOCATION", onClose)
         Spacer(Modifier.height(28.dp))
         ProfilePhoto(user, Acid, Modifier.size(100.dp).align(Alignment.CenterHorizontally))
-        Text("Your photo and location are public. Choose a photo you have permission to use. Location is optional and provided by you.", color = Muted, fontSize = 15.sp, lineHeight = 21.sp, modifier = Modifier.padding(vertical = 20.dp))
+        Text("Your photo and optional country are public. Your city is never shown. Choose a photo you have permission to use.", color = Muted, fontSize = 15.sp, lineHeight = 21.sp, modifier = Modifier.padding(vertical = 20.dp))
         Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !ui.profileBusy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink)) {
             Text(if (ui.profileBusy) "SAVING…" else "CHOOSE PROFILE PHOTO", fontWeight = FontWeight.Black)
         }
         if (user?.photoVersion != null) Button(onClick = { onPhoto(null) }, enabled = !ui.profileBusy, modifier = Modifier.fillMaxWidth()) { Text("REMOVE PHOTO") }
         Spacer(Modifier.height(24.dp))
-        IdentityInput("CITY (OPTIONAL)", "e.g. London", city, onChange = { city = it.take(60) })
+        CountryPicker(country) { country = it }
         Spacer(Modifier.height(18.dp))
-        IdentityInput("COUNTRY CODE (OPTIONAL)", "e.g. GB, US, NG", country, onChange = { country = it.uppercase().take(2) })
-        Text("Leave both fields empty to hide your location. We do not use GPS or guess where you live.", color = Muted, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(vertical = 18.dp))
-        error?.let { Text(it, color = Orange, fontSize = 14.sp) }
-        Button(onClick = {
-            if (country.isNotBlank() && country !in java.util.Locale.getISOCountries()) error = "Enter a valid two-letter country code."
-            else { error = null; onSave(city, country) }
-        }, enabled = !ui.profileBusy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp), colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink)) { Text("SAVE LOCATION", fontWeight = FontWeight.Black) }
+        Button(onClick = { onSave("", country) }, enabled = !ui.profileBusy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp), colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink)) { Text("SAVE COUNTRY", fontWeight = FontWeight.Black) }
     }
 }
 
@@ -1207,72 +1211,35 @@ private fun RuleCard(index: String, icon: String, title: String, detail: String,
 @Composable
 private fun IdentityOverlay(
     ui: OneUiState,
+    handle: String,
     onClose: () -> Unit,
-    onCreateCode: () -> Unit,
+    onGoogle: (Boolean) -> Unit,
     onHandleChanged: (String) -> Unit,
-    onCodeChanged: (String) -> Unit,
-    onRecover: () -> Unit,
     onReclaim: () -> Unit,
 ) {
-    val canRecover = ui.recoveryHandle.length >= AuctionRules.HANDLE_MIN && ui.recoveryCodeInput.length >= 10
-    Box(Modifier.fillMaxSize().background(Ink)) {
-        LiveField(Acid, Modifier.fillMaxSize().graphicsLayer { alpha = .24f })
-        Column(
-            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
-                .verticalScroll(rememberScrollState()).padding(20.dp),
-        ) {
-            OverlayHeader("IDENTITY", "RECOVERY // PRIVATE CODE", onClose)
-            Spacer(Modifier.height(24.dp))
-            StatusPill("DO NOT LOSE YOUR NAME", Acid)
-            Spacer(Modifier.height(13.dp))
-            Text("KEEP YOUR\nPLACE IN ONE.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 39.sp, lineHeight = 37.sp, letterSpacing = (-1.5).sp)
-            Text("Your alias, Hall history and tickets are attached to this anonymous account. Create one recovery code and save it somewhere private.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 11.dp))
-            Spacer(Modifier.height(20.dp))
-
-            ui.recoveryCode?.let { code ->
-                Surface(color = Acid.copy(alpha = .1f), shape = RoundedCornerShape(17.dp), border = BorderStroke(1.dp, Acid.copy(alpha = .52f))) {
-                    Column(Modifier.fillMaxWidth().padding(17.dp)) {
-                        Text("YOUR RECOVERY CODE", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
-                        Text(code, color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.padding(top = 10.dp))
-                        Text("Save it off this phone. Anyone with this code can recover this identity.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 10.dp))
-                    }
-                }
-            } ?: Button(
-                onClick = onCreateCode,
-                enabled = !ui.identityBusy,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink),
-                shape = RoundedCornerShape(14.dp),
-            ) { Text(if (ui.identityBusy) "CREATING BACKUP..." else "CREATE MY RECOVERY CODE", fontWeight = FontWeight.Black, fontSize = 12.sp) }
-
-            ui.identityError?.let { Spacer(Modifier.height(10.dp)); ErrorStrip(it) }
-            Spacer(Modifier.height(26.dp))
-            Text("LOST YOUR IDENTITY?", color = Ice, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
-            Text("Use the handle and recovery code you saved to attach that identity to this installation.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 7.dp, bottom = 11.dp))
-            IdentityInput("OLD HANDLE", "B0WEI", ui.recoveryHandle, onHandleChanged, prefix = "@")
-            Spacer(Modifier.height(10.dp))
-            IdentityInput("RECOVERY CODE", "ONE-XXXX-XXXX-XXXX", ui.recoveryCodeInput, onCodeChanged)
-            Spacer(Modifier.height(13.dp))
-            Button(
-                onClick = onRecover,
-                enabled = canRecover && !ui.identityBusy,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Ice, contentColor = Ink, disabledContainerColor = Color.White.copy(alpha = .08f), disabledContentColor = Muted),
-                shape = RoundedCornerShape(14.dp),
-            ) { Text(if (ui.identityBusy) "VERIFYING..." else "RECOVER THIS IDENTITY", fontWeight = FontWeight.Black, fontSize = 12.sp) }
-            Spacer(Modifier.height(10.dp))
-            Surface(
-                modifier = Modifier.fillMaxWidth().clickable(enabled = ui.recoveryHandle.length >= AuctionRules.HANDLE_MIN && !ui.identityBusy, onClick = onReclaim),
-                color = Color.Transparent,
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, Orange.copy(alpha = .55f)),
-            ) {
-                Text("RECLAIM UNUSED GHOST ALIAS", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(15.dp))
-            }
-            Spacer(Modifier.height(16.dp))
-            Text("Reclaim only works for a two-week-old unused shell with no history, purchases or recovery code. Real identities always require their private recovery code.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp)
-        }
+    var confirmRestore by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize().background(Ink).statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(24.dp)) {
+        OverlayHeader("KEEP YOUR IDENTITY", "OPTIONAL // KEEP PLAYING", onClose)
+        Spacer(Modifier.height(30.dp))
+        Text("KEEP $handle", color = Paper, fontFamily = display, fontSize = 40.sp)
+        Text("If you haven't linked Google, this identity relies on this installation. Link it to return on another device without losing your reigns.", color = Muted, fontSize = 16.sp, modifier = Modifier.padding(vertical = 20.dp))
+        Button(onClick = { onGoogle(false) }, enabled = !ui.identityBusy && BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Continue with Google") }
+        if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank()) Text("Google connection is awaiting setup. You can keep playing.", color = Muted)
+        TextButton(onClick = onClose) { Text("Not now") }
+        ui.identityError?.let { ErrorStrip(it) }
+        Spacer(Modifier.height(24.dp))
+        TextButton(onClick = { confirmRestore = true }, enabled = !ui.identityBusy && BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank()) { Text("Restore a Google-linked account") }
+        Text("Old unlinked handle? Only an unused, unprotected shell can be reclaimed automatically. Accounts with history require support and proof of ownership.", color = Muted)
+        IdentityInput("OLD HANDLE", "BOWEI", ui.recoveryHandle, onHandleChanged, prefix = "@")
+        TextButton(onClick = onReclaim, enabled = !ui.identityBusy && ui.recoveryHandle.length >= AuctionRules.HANDLE_MIN) { Text("Check unused handle") }
     }
+    if (confirmRestore) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { confirmRestore = false },
+        title = { Text("Switch to your Google account?") },
+        text = { Text("This switches away from the current identity. Its history and tickets are not merged. Link your current identity first if you want to keep it.") },
+        confirmButton = { TextButton(onClick = { confirmRestore = false; onGoogle(true) }) { Text("Restore account") } },
+        dismissButton = { TextButton(onClick = { confirmRestore = false }) { Text("Cancel") } },
+    )
 }
 
 @Composable
@@ -1295,13 +1262,14 @@ private fun HandleOverlay(
     world: WorldState,
     ui: OneUiState,
     onTextChanged: (String) -> Unit,
-    onSubmit: () -> Unit,
+    onSubmit: (String) -> Unit,
     onKeepAnonymous: () -> Unit,
     onClose: () -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val currentAlias = world.currentUser?.handle ?: "@PLAYER"
+    var country by rememberSaveable { mutableStateOf(world.currentUser?.countryCode?.takeIf { it in java.util.Locale.getISOCountries() } ?: suggestedCountry()) }
     val candidate = AuctionRules.normalizeHandle(ui.handleText)
     val valid = ui.handleText.isNotBlank() && AuctionRules.validateHandle(candidate) == null
     val remaining = AuctionRules.HANDLE_MAX - candidate.length
@@ -1386,6 +1354,7 @@ private fun HandleOverlay(
                 Text(remaining.toString(), color = if (remaining < 0) Orange else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
 
+            CountryPicker(country) { country = it }
             ui.handleError?.let {
                 Spacer(Modifier.height(10.dp))
                 ErrorStrip(it)
@@ -1406,7 +1375,7 @@ private fun HandleOverlay(
 
             Spacer(Modifier.height(20.dp))
             Button(
-                onClick = onSubmit,
+                onClick = { onSubmit(country) },
                 enabled = valid && !ui.handleSaving,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(

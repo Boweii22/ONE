@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleChallengeLink(intent)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
@@ -51,6 +52,7 @@ class MainActivity : ComponentActivity() {
                     onRequestPush = ::requestPushPermission,
                     onShareReceipt = ::shareReceipt,
                     onShareONE = ::shareONE,
+                    onGoogle = ::googleIdentity,
                     onIdentifyUser = ::identifyUser,
                     onOpenPrivacy = { openUrl("${BuildConfig.ONE_WEB_URL}/privacy") },
                     onOpenDeletionHelp = { openUrl("${BuildConfig.ONE_WEB_URL}/delete-account") },
@@ -59,6 +61,25 @@ class MainActivity : ComponentActivity() {
         }
         syncPushPermission()
         observePushRegistration()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleChallengeLink(intent)
+    }
+
+    private fun handleChallengeLink(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme == "https" && uri.host == Uri.parse(BuildConfig.ONE_WEB_URL).host &&
+            uri.path in listOf("", "/") && uri.getQueryParameter("challenge") == "1") {
+            // Always resolve the owner from the live server, not the untrusted URL label.
+            lifecycleScope.launch {
+                viewModel.world.collect { state ->
+                    if (state.connected) { viewModel.openChallenge(); throw kotlinx.coroutines.CancellationException() }
+                }
+            }
+        }
     }
 
     override fun onResume() {
@@ -212,9 +233,35 @@ class MainActivity : ComponentActivity() {
         share(text, "Share your reign")
     }
 
+    private fun googleIdentity(restore: Boolean) {
+        if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank()) {
+            viewModel.showToast("Google sign-in is not configured in this build yet.")
+            return
+        }
+        lifecycleScope.launch {
+            val nonce = java.util.UUID.randomUUID().toString()
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(nonce.toByteArray()).joinToString("") { "%02x".format(it) }
+            try {
+                val option = com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+                    .Builder(BuildConfig.GOOGLE_WEB_CLIENT_ID).setNonce(digest).build()
+                val request = androidx.credentials.GetCredentialRequest.Builder().addCredentialOption(option).build()
+                val result = androidx.credentials.CredentialManager.create(this@MainActivity)
+                    .getCredential(this@MainActivity, request)
+                val token = com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+                    .createFrom(result.credential.data).idToken
+                viewModel.googleIdentity(token, nonce, restore)
+            } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+                // Not now always means keep playing with the existing identity.
+            } catch (e: Exception) {
+                viewModel.showToast("Google sign-in could not complete. Your current identity is unchanged.")
+            }
+        }
+    }
+
     private fun shareONE() {
         share(
-            "One person owns the only live screen. Everyone can watch. Anyone can steal it. ${BuildConfig.ONE_WEB_URL} #OWNONE #Shipaton",
+            "${viewModel.world.value.reign.owner.handle} owns ONE. Take it from them. ${BuildConfig.ONE_WEB_URL}/?challenge=1",
             "Invite someone to ONE",
         )
     }
