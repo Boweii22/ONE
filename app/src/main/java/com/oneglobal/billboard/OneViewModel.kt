@@ -141,6 +141,33 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         _ui.update { it.copy(tab = tab, overlay = Overlay.NONE) }
     }
 
+    fun openProfile() { _ui.update { it.copy(overlay = Overlay.PROFILE) } }
+
+    fun saveProfile(city: String, countryCode: String) {
+        if (_ui.value.profileBusy) return
+        _ui.update { it.copy(profileBusy = true) }
+        viewModelScope.launch {
+            try {
+                repository.updateProfile(city.trim(), countryCode.trim().uppercase())
+                _ui.update { it.copy(overlay = Overlay.NONE, toast = "Profile updated") }
+            } catch (e: Exception) { showToast("Profile could not be saved. Check your connection and try again.") }
+            finally { _ui.update { it.copy(profileBusy = false) } }
+        }
+    }
+
+    fun updateProfilePhoto(uri: android.net.Uri?) {
+        if (_ui.value.profileBusy) return
+        _ui.update { it.copy(profileBusy = true) }
+        viewModelScope.launch {
+            try {
+                val jpeg = uri?.let { com.oneglobal.billboard.ui.prepareProfilePhoto(getApplication(), it) }
+                repository.updatePhoto(jpeg)
+                showToast(if (jpeg == null) "Photo removed" else "Profile photo updated")
+            } catch (e: Exception) { showToast("Photo could not be saved. Please try again.") }
+            finally { _ui.update { it.copy(profileBusy = false) } }
+        }
+    }
+
     fun completeOnboarding() {
         profilePreferences.edit().putBoolean("onboarding_complete", true).apply()
         _ui.update { it.copy(onboardingComplete = true) }

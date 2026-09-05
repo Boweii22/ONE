@@ -1,6 +1,9 @@
 package com.oneglobal.billboard.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -40,6 +43,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -89,6 +93,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -124,7 +129,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val mono = FontFamily.Monospace
-private val display = FontFamily.SansSerif
+private val display = FontFamily(Font(R.font.anton))
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -228,6 +233,7 @@ fun OneApp(
                     onUnblockAll = viewModel::unblockAll,
                     onDeleteAccount = viewModel::openDeleteAccount,
                     onHowItWorks = viewModel::openHowItWorks,
+                    onEditProfile = viewModel::openProfile,
                 )
             }
         }
@@ -271,6 +277,7 @@ fun OneApp(
         ) { overlay ->
             when (overlay) {
                 Overlay.NONE -> Unit
+                Overlay.PROFILE -> ProfileOverlay(world, ui, viewModel::closeOverlay, viewModel::saveProfile, viewModel::updateProfilePhoto)
                 Overlay.CHALLENGE -> ChallengeOverlay(
                     world = world,
                     ui = ui,
@@ -373,11 +380,11 @@ private fun SplashScreen() {
             Box(Modifier.align(Alignment.BottomCenter).offset(y = 4.dp).size(5.dp).clip(CircleShape).background(Ice))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.scale(pulse)) {
-            Text("1", color = Acid, fontWeight = FontWeight.Black, fontSize = 154.sp, lineHeight = 136.sp, letterSpacing = (-10).sp)
+            Text("1", color = Acid, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 154.sp, lineHeight = 136.sp, letterSpacing = (-10).sp)
             Text("ONE", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 7.sp)
         }
         Column(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 34.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("CONNECTING TO THE WORLD", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.5.sp)
+            Text("CONNECTING TO THE WORLD", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.5.sp)
             Spacer(Modifier.height(10.dp))
             Box(Modifier.width(120.dp).height(2.dp).background(Color.White.copy(alpha = .08f))) {
                 Box(Modifier.fillMaxWidth(.72f).fillMaxHeight().background(Acid))
@@ -404,8 +411,8 @@ private fun OnboardingScreen(onEnter: () -> Unit) {
         }
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 22.dp, vertical = 17.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("ONE / FIRST ENTRY", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.sp)
-                Text("${page + 1} / ${pages.size}", color = item.color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp)
+                Text("ONE / FIRST ENTRY", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
+                Text("${page + 1} / ${pages.size}", color = item.color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
             }
             Spacer(Modifier.height(24.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -417,19 +424,19 @@ private fun OnboardingScreen(onEnter: () -> Unit) {
                 Column(Modifier.fillMaxSize()) {
                     Spacer(Modifier.weight(.45f))
                     Box(Modifier.size(132.dp).clip(CircleShape).background(item.color).shadow(28.dp, CircleShape, spotColor = item.color.copy(alpha = .4f)), contentAlignment = Alignment.Center) {
-                        Text(item.icon, color = Ink, fontWeight = FontWeight.Black, fontSize = 54.sp)
+                        Text(item.icon, color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 54.sp)
                     }
                     Spacer(Modifier.height(32.dp))
-                    Text(item.eyebrow, color = item.color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp, letterSpacing = 1.6.sp)
-                    Text(item.title, color = Paper, fontWeight = FontWeight.Black, fontSize = 43.sp, lineHeight = 39.sp, letterSpacing = (-1.8).sp, modifier = Modifier.padding(top = 9.dp))
-                    Text(item.body, color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 15.dp, end = 24.dp))
+                    Text(item.eyebrow, color = item.color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.6.sp)
+                    Text(item.title, color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 39.sp, letterSpacing = (-1.8).sp, modifier = Modifier.padding(top = 9.dp))
+                    Text(item.body, color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 15.dp, end = 24.dp))
                     Spacer(Modifier.weight(.35f))
                 }
             }
             Button(onClick = { if (page < pages.lastIndex) page++ else onEnter() }, modifier = Modifier.fillMaxWidth().height(62.dp), colors = ButtonDefaults.buttonColors(containerColor = item.color, contentColor = Ink), shape = RoundedCornerShape(6.dp)) {
                 Text(if (page == pages.lastIndex) "ENTER THE LIVE WORLD  →" else "CONTINUE  →", fontWeight = FontWeight.Black, fontSize = 13.sp)
             }
-            if (page > 0) Text("BACK", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().clickable { page-- }.padding(13.dp))
+            if (page > 0) Text("BACK", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().clickable { page-- }.padding(13.dp))
             else Spacer(Modifier.height(34.dp))
         }
     }
@@ -440,9 +447,9 @@ private data class OnboardingPage(val number: String, val title: String, val bod
 @Composable
 private fun OnboardingStep(index: String, icon: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(index, color = Muted, fontFamily = mono, fontSize = 7.sp)
+        Text(index, color = Muted, fontFamily = mono, fontSize = 12.sp)
         Text(icon, color = Acid, fontWeight = FontWeight.Black, fontSize = 22.sp, modifier = Modifier.padding(vertical = 3.dp))
-        Text(label, color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp, letterSpacing = .7.sp)
+        Text(label, color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = .7.sp)
     }
 }
 
@@ -470,26 +477,27 @@ private fun LiveScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 84.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 100.dp),
         ) {
             LiveHeader(world, accent, onShareONE, onReport)
             Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OwnerMarkLarge(world.reign.owner.initials, accent)
+                ProfilePhoto(world.reign.owner, accent, Modifier.size(58.dp))
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(world.reign.owner.handle, color = Paper, fontWeight = FontWeight.Black, fontSize = 20.sp)
                         if (world.reign.owner.verified) {
                             Spacer(Modifier.width(5.dp))
-                            Text("◆", color = accent, fontSize = 10.sp)
+                            Text("◆", color = accent, fontSize = 12.sp)
                         }
                     }
                     Text(
-                        "${world.reign.owner.city.uppercase()}, ${world.reign.owner.countryCode}",
+                        world.reign.owner.locationLabel(),
                         color = Muted,
                         fontFamily = mono,
-                        fontSize = 10.sp,
+                        fontSize = 12.sp,
                         letterSpacing = 1.sp,
                     )
                 }
@@ -500,7 +508,7 @@ private fun LiveScreen(
                 accent = accent,
                 connected = world.connected,
                 city = world.reign.owner.city,
-                modifier = Modifier.fillMaxWidth().weight(1f),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 300.dp).padding(vertical = 12.dp),
             )
             ViewLedger(world, accent, protectedSeconds)
             Spacer(Modifier.height(12.dp))
@@ -523,7 +531,7 @@ private fun LiveHeader(world: WorldState, accent: Color, onShare: () -> Unit, on
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).clip(CircleShape).background(accent))
             Spacer(Modifier.width(8.dp))
-            Text("LIVE WORLD STATE", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp, letterSpacing = .7.sp)
+            Text("LIVE WORLD STATE", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = .7.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             CircleAction("◎", onShare)
@@ -549,15 +557,7 @@ private fun LiveMapMessageStage(
             alpha = .24f,
             modifier = Modifier.fillMaxSize().padding(top = 10.dp),
         )
-        Row(
-            Modifier.fillMaxWidth().align(Alignment.TopStart).padding(top = 13.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(if (connected) "GLOBAL SIGNAL // LIVE" else "GLOBAL SIGNAL // RECONNECTING", color = if (connected) accent else Orange, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 7.sp, letterSpacing = .8.sp)
-            Text(city.uppercase(), color = Paper.copy(alpha = .48f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 7.sp)
-        }
-        Box(Modifier.fillMaxWidth().align(Alignment.BottomStart).padding(bottom = 17.dp)) {
+        Box(Modifier.fillMaxWidth().align(Alignment.CenterStart).padding(vertical = 12.dp)) {
             MessageStage(message = message, accent = accent)
         }
     }
@@ -566,23 +566,20 @@ private fun LiveMapMessageStage(
 @Composable
 private fun MessageStage(message: String, accent: Color) {
     val size = when {
-        message.length <= 22 -> 53.sp
-        message.length <= 42 -> 43.sp
-        message.length <= 62 -> 34.sp
-        message.length <= 90 -> 28.sp
-        else -> 23.sp
+        message.length <= 32 -> 76.sp
+        message.length <= 55 -> 62.sp
+        message.length <= 90 -> 50.sp
+        else -> 42.sp
     }
     Column {
         Text(
-            message,
+            message.uppercase(),
             color = Paper,
             fontFamily = display,
             fontWeight = FontWeight.Black,
             fontSize = size,
-            lineHeight = size * .91f,
-            letterSpacing = (-1.8).sp,
-            maxLines = 5,
-            overflow = TextOverflow.Ellipsis,
+            lineHeight = size * 1.05f,
+            letterSpacing = (-.5).sp,
         )
     }
 }
@@ -614,9 +611,9 @@ private fun ViewLedger(world: WorldState, accent: Color, protectedSeconds: Int) 
 @Composable
 private fun LiveMetric(icon: String, label: String, value: String, footer: String, color: Color, modifier: Modifier = Modifier) {
     Column(modifier.padding(horizontal = 12.dp)) {
-        Text("$icon  $label", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp)
-        Text(value, color = color, fontWeight = FontWeight.Black, fontSize = 28.sp, letterSpacing = (-1).sp, modifier = Modifier.padding(top = 3.dp))
-        Text(footer, color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 7.sp, letterSpacing = .8.sp)
+        Text("$icon  $label", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(value, color = color, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 28.sp, letterSpacing = (-1).sp, modifier = Modifier.padding(top = 3.dp))
+        Text(footer, color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = .8.sp)
     }
 }
 
@@ -628,35 +625,38 @@ private fun CrowdControls(
 ) {
     Column {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("LIVE REACTIONS", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = .8.sp)
-            Text("${formatNumber(world.reactions.size)} TOTAL", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp)
+            Text("LIVE REACTIONS", color = Muted, fontFamily = mono, fontSize = 12.sp, letterSpacing = .8.sp)
+            Text(world.reactionCounts?.values?.sum()?.let { "${formatNumber(it)} TOTAL" } ?: "SYNCING", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
         }
         Spacer(Modifier.height(9.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            ReactionOrb("🔥", "FIRE") { onReact("FIRE") }
-            ReactionOrb("👏", "RESPECT") { onReact("RESPECT") }
-            ReactionOrb("💯", "100") { onReact("100") }
-            ReactionOrb("👀", "WATCH") { onReact("WATCH") }
-            ReactionOrb("🚀", "ECHO") { onEcho() }
+            ReactionOrb("🔥", "FIRE", world.reactionCounts?.get("FIRE")) { onReact("FIRE") }
+            ReactionOrb("👏", "RESPECT", world.reactionCounts?.get("RESPECT")) { onReact("RESPECT") }
+            ReactionOrb("💯", "100", world.reactionCounts?.get("100")) { onReact("100") }
+            ReactionOrb("👀", "WATCH", world.reactionCounts?.get("WATCH")) { onReact("WATCH") }
+            ReactionOrb("🚀", "Rocket", world.reactionCounts?.get("ROCKET")) { onReact("ROCKET") }
         }
     }
 }
 
 @Composable
-private fun ReactionOrb(icon: String, label: String, onClick: () -> Unit) {
+private fun ReactionOrb(icon: String, label: String, count: Int?, onClick: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
-                .size(45.dp)
+                .size(56.dp)
                 .clip(CircleShape)
                 .background(InkRaised)
                 .border(1.dp, Color.White.copy(alpha = .1f), CircleShape)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
-            Text(icon, fontSize = 19.sp)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(icon, fontSize = 24.sp)
+                Text(count?.let(::formatNumber) ?: "—", color = Paper, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
         }
-        Text(label, color = Muted, fontFamily = mono, fontSize = 6.sp, modifier = Modifier.padding(top = 4.dp))
+
     }
 }
 
@@ -702,7 +702,7 @@ private fun AuctionCard(
             if (isOwner) "The world is watching your message." else "Challenge ${world.reign.owner.handle} to take ONE.",
             color = Muted,
             fontFamily = mono,
-            fontSize = 8.sp,
+            fontSize = 12.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -726,8 +726,8 @@ private fun LibraryScreen(
     ) {
         SectionHeader("YOUR WORDS", "${world.messages.count { it.status == MessageStatus.APPROVED }} APPROVED")
         Spacer(Modifier.height(24.dp))
-        Text("YOUR WORDS,\nREADY FOR THE WORLD.", color = Paper, fontWeight = FontWeight.Black, fontSize = 39.sp, lineHeight = 37.sp, letterSpacing = (-1.4).sp)
-        Text("Messages are screened before they can enter the live battle.", color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 11.dp, bottom = 20.dp))
+        Text("YOUR WORDS,\nREADY FOR THE WORLD.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 39.sp, lineHeight = 37.sp, letterSpacing = (-1.4).sp)
+        Text("Messages are screened before they can enter the live battle.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 11.dp, bottom = 20.dp))
         PrimaryButton("+  COMPOSE A MESSAGE", Acid, onCompose)
         Spacer(Modifier.height(18.dp))
         world.messages.forEach { message ->
@@ -760,7 +760,7 @@ private fun MessageCard(message: OneMessage, selected: Boolean, onDeploy: () -> 
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             StatusPill(message.status.name, statusColor)
-            Text("USED ${message.timesDeployed}×", color = Muted, fontFamily = mono, fontSize = 7.sp)
+            Text("USED ${message.timesDeployed}×", color = Muted, fontFamily = mono, fontSize = 12.sp)
         }
         Spacer(Modifier.height(16.dp))
         Text("“${message.text}”", color = if (message.status == MessageStatus.APPROVED) Paper else Muted, fontWeight = FontWeight.Black, fontSize = 21.sp, lineHeight = 24.sp)
@@ -772,7 +772,7 @@ private fun MessageCard(message: OneMessage, selected: Boolean, onDeploy: () -> 
                     color = statusColor,
                     shape = RoundedCornerShape(10.dp),
                 ) {
-                    Text("DEPLOY  →", color = Ink, fontWeight = FontWeight.Black, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp))
+                    Text("DEPLOY  →", color = Ink, fontWeight = FontWeight.Black, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp))
                 }
             }
         }
@@ -786,7 +786,7 @@ private fun HallScreen(world: WorldState) {
     val today = world.hallToday.ifEmpty { world.hall }
     val allTime = world.hallAllTime.ifEmpty { world.hall }
     val selectedEntries = if (period == HallPeriod.TODAY) today else allTime
-    val visibleEntries = if (showFull) selectedEntries else selectedEntries.take(4)
+    val visibleEntries = if (showFull) selectedEntries else (selectedEntries.take(4) + selectedEntries.filter { it.owner.id == world.currentUserId }).distinctBy { it.owner.id }
     val selectedPeriodIsLive = world.connected && !world.demoMode && (period == HallPeriod.TODAY || world.hallAllTimeLive)
 
     Column(
@@ -799,25 +799,29 @@ private fun HallScreen(world: WorldState) {
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
             Column {
-                Text("THE HALL.", color = Paper, fontWeight = FontWeight.Black, fontSize = 54.sp, lineHeight = 50.sp, letterSpacing = (-2.2).sp)
-                Text("RANKED FROM VERIFIED LIVE REIGNS", color = Muted, fontFamily = mono, fontSize = 7.sp, letterSpacing = .8.sp, modifier = Modifier.padding(top = 7.dp))
+                Text("THE HALL.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 54.sp, lineHeight = 50.sp, letterSpacing = (-2.2).sp)
+                Text("RANKED FROM VERIFIED LIVE REIGNS", color = Muted, fontFamily = mono, fontSize = 12.sp, letterSpacing = .8.sp, modifier = Modifier.padding(top = 7.dp))
             }
             StatusPill(if (selectedPeriodIsLive) "LIVE DATA" else if (world.demoMode) "PREVIEW" else "SYNCING", if (selectedPeriodIsLive) Acid else Orange)
         }
         Row(Modifier.fillMaxWidth().padding(top = 14.dp).height(43.dp).clip(RoundedCornerShape(7.dp)).border(1.dp, Color.White.copy(alpha = .14f), RoundedCornerShape(7.dp))) {
             Box(Modifier.weight(1f).fillMaxHeight().background(if (period == HallPeriod.TODAY) Acid else Color.Transparent).clickable { period = HallPeriod.TODAY; showFull = false }, contentAlignment = Alignment.Center) {
-                Text("TODAY", color = if (period == HallPeriod.TODAY) Ink else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp)
+                Text("TODAY", color = if (period == HallPeriod.TODAY) Ink else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
             }
             Box(Modifier.weight(1f).fillMaxHeight().background(if (period == HallPeriod.ALL_TIME) Acid else Color.Transparent).clickable { period = HallPeriod.ALL_TIME; showFull = false }, contentAlignment = Alignment.Center) {
-                Text("ALL TIME", color = if (period == HallPeriod.ALL_TIME) Ink else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp)
+                Text("ALL TIME", color = if (period == HallPeriod.ALL_TIME) Ink else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
             }
         }
         Spacer(Modifier.height(18.dp))
+        Text("Swipe the table to see all stats", color = Muted, fontSize = 12.sp)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        Column(Modifier.width(560.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-            Text("#", color = Muted, fontFamily = mono, fontSize = 7.sp, modifier = Modifier.width(28.dp))
-            Text("OWNER", color = Muted, fontFamily = mono, fontSize = 7.sp, modifier = Modifier.weight(1f))
-            Text("REIGN", color = Muted, fontFamily = mono, fontSize = 7.sp, modifier = Modifier.width(70.dp), textAlign = TextAlign.End)
-            Text("VIEWS", color = Muted, fontFamily = mono, fontSize = 7.sp, modifier = Modifier.width(62.dp), textAlign = TextAlign.End)
+            Text("#", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.width(28.dp))
+            Text("OWNER", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            Text("LONGEST", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.width(90.dp), textAlign = TextAlign.End)
+            Text("TAKEOVERS", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.width(90.dp), textAlign = TextAlign.End)
+            Text("VIEWS", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.width(62.dp), textAlign = TextAlign.End)
         }
         Spacer(Modifier.height(7.dp))
         AnimatedContent(period, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(140)) }, label = "hall-period") {
@@ -826,7 +830,7 @@ private fun HallScreen(world: WorldState) {
                     Column(Modifier.fillMaxWidth().padding(vertical = 52.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("◇", color = Acid, fontSize = 30.sp)
                         Text("THE HALL IS WAITING", color = Paper, fontWeight = FontWeight.Black, fontSize = 17.sp, modifier = Modifier.padding(top = 10.dp))
-                        Text("The first verified reign will appear here.", color = Muted, fontFamily = mono, fontSize = 8.sp, modifier = Modifier.padding(top = 5.dp))
+                        Text("The first verified reign will appear here.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
                     }
                 } else {
                     visibleEntries.forEach { entry ->
@@ -838,10 +842,12 @@ private fun HallScreen(world: WorldState) {
             }
         }
         Spacer(Modifier.height(18.dp))
-        Surface(color = if (showFull) Acid else Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Acid.copy(alpha = .75f)), modifier = Modifier.fillMaxWidth().clickable { showFull = !showFull }) {
-            Text(if (showFull) "COLLAPSE LEADERBOARD  ↑" else "VIEW FULL LEADERBOARD  ↓", color = if (showFull) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(16.dp))
         }
-        Text("${selectedEntries.size} VERIFIED REIGNS // ${if (selectedPeriodIsLive) "UPDATED LIVE" else "SERVER UPDATE REQUIRED"}", color = Muted, fontFamily = mono, fontSize = 7.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
+        }
+        Surface(color = if (showFull) Acid else Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Acid.copy(alpha = .75f)), modifier = Modifier.fillMaxWidth().clickable { showFull = !showFull }) {
+            Text(if (showFull) "COLLAPSE LEADERBOARD  ↑" else "VIEW FULL LEADERBOARD  ↓", color = if (showFull) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
+        }
+        Text("${selectedEntries.size} VERIFIED REIGNS // ${if (selectedPeriodIsLive) "UPDATED LIVE" else "SERVER UPDATE REQUIRED"}", color = Muted, fontFamily = mono, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
     }
 }
 
@@ -863,6 +869,7 @@ private fun YouScreen(
     onUnblockAll: () -> Unit,
     onDeleteAccount: () -> Unit,
     onHowItWorks: () -> Unit,
+    onEditProfile: () -> Unit,
 ) {
     val user = world.currentUser
     val handle = user?.handle ?: if (world.demoMode) "@BOWEI" else "@CONNECTING"
@@ -876,29 +883,29 @@ private fun YouScreen(
             .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 112.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("YOU.", color = Paper, fontWeight = FontWeight.Black, fontSize = 54.sp, lineHeight = 50.sp, letterSpacing = (-2.2).sp)
+            Text("YOU.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 54.sp, lineHeight = 50.sp, letterSpacing = (-2.2).sp)
             CircleAction("ⓘ", onHowItWorks)
         }
         Spacer(Modifier.height(18.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(64.dp).clip(CircleShape).background(Ink).border(2.dp, Acid, CircleShape), contentAlignment = Alignment.Center) {
-                Text(initials, color = Acid, fontWeight = FontWeight.Black, fontSize = 22.sp)
-            }
+            ProfilePhoto(user, Acid, Modifier.size(72.dp).clickable(onClick = onEditProfile))
             Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f)) {
                 Text(handle, color = Paper, fontWeight = FontWeight.Black, fontSize = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(if (world.connected) "${user?.city ?: "EARTH"}, ${user?.countryCode ?: "XX"}" else "CONNECTING", color = Muted, fontFamily = mono, fontSize = 9.sp, letterSpacing = .7.sp)
+                Text(if (world.connected) user?.locationLabel() ?: "Location not shared" else "CONNECTING", color = Muted, fontFamily = mono, fontSize = 12.sp, letterSpacing = .7.sp)
             }
             Box(Modifier.width(1.dp).height(56.dp).background(Color.White.copy(alpha = .16f)))
             Column(Modifier.padding(start = 16.dp).clickable(onClick = onVault), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(world.credits.toString(), color = Acid, fontWeight = FontWeight.Black, fontSize = 25.sp)
-                Text("TICKETS", color = Muted, fontFamily = mono, fontSize = 7.sp)
+                Text(world.credits.toString(), color = Acid, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 25.sp)
+                Text("TICKETS", color = Muted, fontFamily = mono, fontSize = 12.sp)
             }
         }
         Spacer(Modifier.height(22.dp))
-        Text("YOUR STATS", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = .8.sp)
+        Text("YOUR STATS", color = Muted, fontFamily = mono, fontSize = 12.sp, letterSpacing = .8.sp)
         Spacer(Modifier.height(8.dp))
         UserStatsPanel(world)
+        Spacer(Modifier.height(14.dp))
+        SettingsCard("PHOTO & LOCATION", "Add a public photo and choose your location.", "EDIT", Acid, onEditProfile)
         Spacer(Modifier.height(14.dp))
         SettingsCard(
             title = "PUBLIC HANDLE",
@@ -978,8 +985,37 @@ private fun YouScreen(
             onClick = onDeleteAccount,
         )
         Spacer(Modifier.height(18.dp))
-        Text(if (world.connected) "GLOBAL LEDGER CONNECTED" else "GLOBAL LEDGER OFFLINE", color = if (world.connected) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.2.sp)
-        Text("Ownership, cooldowns, tickets, views and race ordering are controlled by the server.", color = Muted, fontFamily = mono, fontSize = 9.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 7.dp))
+        Text(if (world.connected) "GLOBAL LEDGER CONNECTED" else "GLOBAL LEDGER OFFLINE", color = if (world.connected) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.2.sp)
+        Text("Ownership, cooldowns, tickets, views and race ordering are controlled by the server.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 7.dp))
+    }
+}
+
+@Composable
+private fun ProfileOverlay(world: WorldState, ui: OneUiState, onClose: () -> Unit, onSave: (String, String) -> Unit, onPhoto: (android.net.Uri?) -> Unit) {
+    val user = world.currentUser
+    var city by rememberSaveable(user?.id) { mutableStateOf(user?.city?.takeUnless { it.uppercase() in setOf("EARTH", "THE INTERNET", "HIDDEN") }.orEmpty()) }
+    var country by rememberSaveable(user?.id) { mutableStateOf(user?.countryCode?.takeUnless { it == "XX" }.orEmpty()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) onPhoto(uri) }
+    Column(Modifier.fillMaxSize().background(Ink).statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp)) {
+        OverlayHeader("YOUR PROFILE", "PHOTO & LOCATION", onClose)
+        Spacer(Modifier.height(28.dp))
+        ProfilePhoto(user, Acid, Modifier.size(100.dp).align(Alignment.CenterHorizontally))
+        Text("Your photo and location are public. Choose a photo you have permission to use. Location is optional and provided by you.", color = Muted, fontSize = 15.sp, lineHeight = 21.sp, modifier = Modifier.padding(vertical = 20.dp))
+        Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !ui.profileBusy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink)) {
+            Text(if (ui.profileBusy) "SAVING…" else "CHOOSE PROFILE PHOTO", fontWeight = FontWeight.Black)
+        }
+        if (user?.photoVersion != null) Button(onClick = { onPhoto(null) }, enabled = !ui.profileBusy, modifier = Modifier.fillMaxWidth()) { Text("REMOVE PHOTO") }
+        Spacer(Modifier.height(24.dp))
+        IdentityInput("CITY (OPTIONAL)", "e.g. London", city, onChange = { city = it.take(60) })
+        Spacer(Modifier.height(18.dp))
+        IdentityInput("COUNTRY CODE (OPTIONAL)", "e.g. GB, US, NG", country, onChange = { country = it.uppercase().take(2) })
+        Text("Leave both fields empty to hide your location. We do not use GPS or guess where you live.", color = Muted, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(vertical = 18.dp))
+        error?.let { Text(it, color = Orange, fontSize = 14.sp) }
+        Button(onClick = {
+            if (country.isNotBlank() && country !in java.util.Locale.getISOCountries()) error = "Enter a valid two-letter country code."
+            else { error = null; onSave(city, country) }
+        }, enabled = !ui.profileBusy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp), colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink)) { Text("SAVE LOCATION", fontWeight = FontWeight.Black) }
     }
 }
 
@@ -1019,20 +1055,20 @@ private fun ChallengeOverlay(
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 17.dp),
             ) {
-                Text("CURRENT OWNER", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = .8.sp)
+                Text("CURRENT OWNER", color = Muted, fontFamily = mono, fontSize = 12.sp, letterSpacing = .8.sp)
                 Spacer(Modifier.height(9.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    OwnerMark(world.reign.owner.initials, accent)
+                    ProfilePhoto(world.reign.owner, accent, Modifier.size(44.dp))
                     Spacer(Modifier.width(11.dp))
                     Column {
                         Text(world.reign.owner.handle, color = Paper, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                        Text("${world.reign.owner.city.uppercase()}, ${world.reign.owner.countryCode}", color = Muted, fontFamily = mono, fontSize = 9.sp)
+                        Text(world.reign.owner.locationLabel(), color = Muted, fontFamily = mono, fontSize = 12.sp)
                     }
                 }
                 Box(Modifier.fillMaxWidth().padding(vertical = 15.dp).height(1.dp).background(Color.White.copy(alpha = .13f)))
-                Text("THE MESSAGE", color = Muted, fontFamily = mono, fontSize = 8.sp)
-                Text(world.reign.message.text, color = Paper, fontWeight = FontWeight.Black, fontSize = 25.sp, lineHeight = 25.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-                Text("Choose your move.", color = Muted, fontFamily = mono, fontSize = 9.sp, modifier = Modifier.padding(top = 9.dp, bottom = 14.dp))
+                Text("THE MESSAGE", color = Muted, fontFamily = mono, fontSize = 12.sp)
+                Text(world.reign.message.text, color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 25.sp, lineHeight = 25.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+                Text("Choose your move.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 9.dp, bottom = 14.dp))
 
                 ChallengeChoice("ϟ", "FREE STEAL", "Fastest path. Ready after cooldown.", if (needsTicket) "${world.cooldownRemainingSeconds}s" else "READY", Acid, selected = !needsTicket)
                 Spacer(Modifier.height(10.dp))
@@ -1040,7 +1076,7 @@ private fun ChallengeOverlay(
                 Spacer(Modifier.height(10.dp))
                 ChallengeChoice("LIVE", "LIVE CHALLENGE", "Hold to submit an atomic server-verified takeover.", "ATOMIC", Orange, selected = false)
                 Spacer(Modifier.height(16.dp))
-                Text("YOUR APPROVED MESSAGE", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = .7.sp)
+                Text("YOUR APPROVED MESSAGE", color = Muted, fontFamily = mono, fontSize = 12.sp, letterSpacing = .7.sp)
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                     world.messages.filter { it.status == MessageStatus.APPROVED }.forEach { message ->
@@ -1081,13 +1117,13 @@ private fun ChallengeOverlay(
 
 @Composable
 private fun UserStatsPanel(world: WorldState) {
-    val longest = world.history.maxOfOrNull { it.durationSeconds } ?: world.userDailyReignSeconds
+    val longest = world.userLongestReign
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).border(1.dp, Color.White.copy(alpha = .14f), RoundedCornerShape(8.dp)).padding(vertical = 15.dp)) {
-        ProfileStat("⬡", formatDuration(longest.toLong()), "LONGEST REIGN", Modifier.weight(1f))
+        ProfileStat("⬡", longest?.let { formatDuration(it.toLong()) } ?: "—", "LONGEST REIGN", Modifier.weight(1f))
         Box(Modifier.width(1.dp).height(58.dp).background(Color.White.copy(alpha = .14f)))
-        ProfileStat("ϟ", world.userRetakesToday.toString(), "TAKEOVERS", Modifier.weight(1f))
+        ProfileStat("ϟ", world.userTakeovers?.toString() ?: "—", "TAKEOVERS", Modifier.weight(1f))
         Box(Modifier.width(1.dp).height(58.dp).background(Color.White.copy(alpha = .14f)))
-        ProfileStat("◉", formatNumber(world.history.sumOf { it.totalViews }), "VERIFIED VIEWS", Modifier.weight(1f))
+        ProfileStat("◉", world.userVerifiedViews?.let(::formatNumber) ?: "—", "VERIFIED VIEWS", Modifier.weight(1f))
     }
 }
 
@@ -1096,7 +1132,7 @@ private fun ProfileStat(icon: String, value: String, label: String, modifier: Mo
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(icon, color = Paper, fontSize = 14.sp)
         Text(value, color = Acid, fontWeight = FontWeight.Black, fontSize = 15.sp, modifier = Modifier.padding(top = 5.dp))
-        Text(label, color = Muted, fontFamily = mono, fontSize = 6.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 3.dp))
+        Text(label, color = Muted, fontFamily = mono, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 3.dp))
     }
 }
 
@@ -1121,13 +1157,13 @@ private fun ChallengeChoice(
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(icon, color = if (selected) Ink else color, fontWeight = FontWeight.Black, fontSize = 28.sp)
+        Text(icon, color = if (selected) Ink else color, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 28.sp)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(title, color = if (selected) Ink else Paper, fontWeight = FontWeight.Black, fontSize = 17.sp)
-            Text(detail, color = if (selected) Ink.copy(alpha = .68f) else Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 11.sp, modifier = Modifier.padding(top = 3.dp))
+            Text(detail, color = if (selected) Ink.copy(alpha = .68f) else Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 3.dp))
         }
-        Text(status, color = if (selected) Ink else color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp, textAlign = TextAlign.End)
+        Text(status, color = if (selected) Ink else color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, textAlign = TextAlign.End)
     }
 }
 
@@ -1138,8 +1174,8 @@ private fun HowItWorksOverlay(onClose: () -> Unit) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp)) {
             OverlayHeader("THE RULES", "ONE SCREEN // ONE OWNER", onClose)
             Spacer(Modifier.height(30.dp))
-            Text("SIMPLE ENOUGH\nTO FEEL DANGEROUS.", color = Paper, fontWeight = FontWeight.Black, fontSize = 39.sp, lineHeight = 36.sp, letterSpacing = (-1.5).sp)
-            Text("Everything you tap in ONE changes the same live world for everyone.", color = Muted, fontFamily = mono, fontSize = 9.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 24.dp))
+            Text("SIMPLE ENOUGH\nTO FEEL DANGEROUS.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 39.sp, lineHeight = 36.sp, letterSpacing = (-1.5).sp)
+            Text("Everything you tap in ONE changes the same live world for everyone.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 12.dp, bottom = 24.dp))
             RuleCard("01", "◉", "WATCH", "There is only one live message. Views count once per verified viewer and reign.", Acid)
             Spacer(Modifier.height(10.dp))
             RuleCard("02", "ϟ", "TAKE", "Choose an approved message and hold to challenge. The server decides the winner atomically.", Orange)
@@ -1148,7 +1184,7 @@ private fun HowItWorksOverlay(onClose: () -> Unit) {
             Spacer(Modifier.height(18.dp))
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(Acid).padding(18.dp)) {
                 Text("NO FAKE NUMBERS.", color = Ink, fontWeight = FontWeight.Black, fontSize = 20.sp)
-                Text("LIVE DATA IS LABELLED LIVE. When disconnected, ONE says so instead of pretending.", color = Ink.copy(alpha = .68f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, lineHeight = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                Text("LIVE DATA IS LABELLED LIVE. When disconnected, ONE says so instead of pretending.", color = Ink.copy(alpha = .68f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 6.dp))
             }
             Spacer(Modifier.height(18.dp))
             PrimaryButton("I’M READY  →", Acid, onClose)
@@ -1163,7 +1199,7 @@ private fun RuleCard(index: String, icon: String, title: String, detail: String,
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text("$index / $title", color = Paper, fontWeight = FontWeight.Black, fontSize = 16.sp)
-            Text(detail, color = Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(detail, color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
@@ -1189,16 +1225,16 @@ private fun IdentityOverlay(
             Spacer(Modifier.height(24.dp))
             StatusPill("DO NOT LOSE YOUR NAME", Acid)
             Spacer(Modifier.height(13.dp))
-            Text("KEEP YOUR\nPLACE IN ONE.", color = Paper, fontWeight = FontWeight.Black, fontSize = 39.sp, lineHeight = 37.sp, letterSpacing = (-1.5).sp)
-            Text("Your alias, Hall history and tickets are attached to this anonymous account. Create one recovery code and save it somewhere private.", color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 11.dp))
+            Text("KEEP YOUR\nPLACE IN ONE.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 39.sp, lineHeight = 37.sp, letterSpacing = (-1.5).sp)
+            Text("Your alias, Hall history and tickets are attached to this anonymous account. Create one recovery code and save it somewhere private.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 11.dp))
             Spacer(Modifier.height(20.dp))
 
             ui.recoveryCode?.let { code ->
                 Surface(color = Acid.copy(alpha = .1f), shape = RoundedCornerShape(17.dp), border = BorderStroke(1.dp, Acid.copy(alpha = .52f))) {
                     Column(Modifier.fillMaxWidth().padding(17.dp)) {
-                        Text("YOUR RECOVERY CODE", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
+                        Text("YOUR RECOVERY CODE", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
                         Text(code, color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.padding(top = 10.dp))
-                        Text("Save it off this phone. Anyone with this code can recover this identity.", color = Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 13.sp, modifier = Modifier.padding(top = 10.dp))
+                        Text("Save it off this phone. Anyone with this code can recover this identity.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 10.dp))
                     }
                 }
             } ?: Button(
@@ -1207,12 +1243,12 @@ private fun IdentityOverlay(
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink),
                 shape = RoundedCornerShape(14.dp),
-            ) { Text(if (ui.identityBusy) "CREATING BACKUP..." else "CREATE MY RECOVERY CODE", fontWeight = FontWeight.Black, fontSize = 11.sp) }
+            ) { Text(if (ui.identityBusy) "CREATING BACKUP..." else "CREATE MY RECOVERY CODE", fontWeight = FontWeight.Black, fontSize = 12.sp) }
 
             ui.identityError?.let { Spacer(Modifier.height(10.dp)); ErrorStrip(it) }
             Spacer(Modifier.height(26.dp))
-            Text("LOST YOUR IDENTITY?", color = Ice, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.sp)
-            Text("Use the handle and recovery code you saved to attach that identity to this installation.", color = Muted, fontFamily = mono, fontSize = 9.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 7.dp, bottom = 11.dp))
+            Text("LOST YOUR IDENTITY?", color = Ice, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
+            Text("Use the handle and recovery code you saved to attach that identity to this installation.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 7.dp, bottom = 11.dp))
             IdentityInput("OLD HANDLE", "B0WEI", ui.recoveryHandle, onHandleChanged, prefix = "@")
             Spacer(Modifier.height(10.dp))
             IdentityInput("RECOVERY CODE", "ONE-XXXX-XXXX-XXXX", ui.recoveryCodeInput, onCodeChanged)
@@ -1223,7 +1259,7 @@ private fun IdentityOverlay(
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Ice, contentColor = Ink, disabledContainerColor = Color.White.copy(alpha = .08f), disabledContentColor = Muted),
                 shape = RoundedCornerShape(14.dp),
-            ) { Text(if (ui.identityBusy) "VERIFYING..." else "RECOVER THIS IDENTITY", fontWeight = FontWeight.Black, fontSize = 10.sp) }
+            ) { Text(if (ui.identityBusy) "VERIFYING..." else "RECOVER THIS IDENTITY", fontWeight = FontWeight.Black, fontSize = 12.sp) }
             Spacer(Modifier.height(10.dp))
             Surface(
                 modifier = Modifier.fillMaxWidth().clickable(enabled = ui.recoveryHandle.length >= AuctionRules.HANDLE_MIN && !ui.identityBusy, onClick = onReclaim),
@@ -1231,10 +1267,10 @@ private fun IdentityOverlay(
                 shape = RoundedCornerShape(14.dp),
                 border = BorderStroke(1.dp, Orange.copy(alpha = .55f)),
             ) {
-                Text("RECLAIM UNUSED GHOST ALIAS", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(15.dp))
+                Text("RECLAIM UNUSED GHOST ALIAS", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(15.dp))
             }
             Spacer(Modifier.height(16.dp))
-            Text("Reclaim only works for a two-week-old unused shell with no history, purchases or recovery code. Real identities always require their private recovery code.", color = Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 13.sp)
+            Text("Reclaim only works for a two-week-old unused shell with no history, purchases or recovery code. Real identities always require their private recovery code.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp)
         }
     }
 }
@@ -1242,7 +1278,7 @@ private fun IdentityOverlay(
 @Composable
 private fun IdentityInput(label: String, placeholder: String, value: String, onChange: (String) -> Unit, prefix: String = "") {
     Column {
-        Text(label, color = Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
+        Text(label, color = Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
         Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(13.dp)).background(InkRaised).border(1.dp, Color.White.copy(alpha = .18f), RoundedCornerShape(13.dp)).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             if (prefix.isNotEmpty()) Text(prefix, color = Acid, fontWeight = FontWeight.Black, fontSize = 17.sp)
@@ -1304,8 +1340,8 @@ private fun HandleOverlay(
                 else "Choose a memorable alias for takeovers, rivalries and the Hall.",
                 color = Muted,
                 fontFamily = mono,
-                fontSize = 10.sp,
-                lineHeight = 15.sp,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
                 modifier = Modifier.padding(top = 12.dp),
             )
 
@@ -1321,7 +1357,7 @@ private fun HandleOverlay(
             }
 
             Spacer(Modifier.height(22.dp))
-            Text("YOUR HANDLE", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.sp)
+            Text("YOUR HANDLE", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
             Spacer(Modifier.height(8.dp))
             Row(
                 Modifier
@@ -1333,21 +1369,21 @@ private fun HandleOverlay(
                     .padding(horizontal = 17.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("@", color = Acid, fontWeight = FontWeight.Black, fontSize = 29.sp)
+                Text("@", color = Acid, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 29.sp)
                 Box(Modifier.weight(1f).padding(start = 2.dp)) {
                     if (ui.handleText.isEmpty()) {
-                        Text("BOWEI", color = Muted.copy(alpha = .45f), fontWeight = FontWeight.Black, fontSize = 29.sp)
+                        Text("BOWEI", color = Muted.copy(alpha = .45f), fontWeight = FontWeight.Black, fontFamily = display, fontSize = 29.sp)
                     }
                     BasicTextField(
                         value = ui.handleText,
                         onValueChange = onTextChanged,
-                        textStyle = TextStyle(color = Paper, fontWeight = FontWeight.Black, fontSize = 29.sp),
+                        textStyle = TextStyle(color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 29.sp),
                         singleLine = true,
                         cursorBrush = Brush.verticalGradient(listOf(Acid, Acid)),
                         modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                     )
                 }
-                Text(remaining.toString(), color = if (remaining < 0) Orange else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                Text(remaining.toString(), color = if (remaining < 0) Orange else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
 
             ui.handleError?.let {
@@ -1364,8 +1400,8 @@ private fun HandleOverlay(
                     .border(1.dp, Ice.copy(alpha = .2f), RoundedCornerShape(17.dp))
                     .padding(15.dp),
             ) {
-                Text("HANDLE ONLY. NEVER YOUR LEGAL NAME.", color = Ice, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
-                Text("No name or email is public. You still have a private account ID and standard server logs, and abuse gets banned.", color = Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                Text("HANDLE ONLY. NEVER YOUR LEGAL NAME.", color = Ice, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                Text("No name or email is public. You still have a private account ID and standard server logs, and abuse gets banned.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 6.dp))
             }
 
             Spacer(Modifier.height(20.dp))
@@ -1388,7 +1424,7 @@ private fun HandleOverlay(
                         else -> "CHOOSE YOUR HANDLE"
                     },
                     fontWeight = FontWeight.Black,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                 )
             }
             Spacer(Modifier.height(10.dp))
@@ -1404,12 +1440,12 @@ private fun HandleOverlay(
                     fontFamily = mono,
                     fontWeight = FontWeight.Black,
                     textAlign = TextAlign.Center,
-                    fontSize = 9.sp,
+                    fontSize = 12.sp,
                     modifier = Modifier.padding(16.dp),
                 )
             }
             Spacer(Modifier.height(15.dp))
-            Text("3-18 CHARACTERS  //  LETTERS, NUMBERS, UNDERSCORES", color = Muted, fontFamily = mono, fontSize = 7.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text("3-18 CHARACTERS  //  LETTERS, NUMBERS, UNDERSCORES", color = Muted, fontFamily = mono, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -1440,22 +1476,22 @@ private fun ReceiptOverlay(
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 OneLogo(Acid, compact = true)
-                Text(if (stillOwner) "LIVE OWNERSHIP" else "REIGN COMPLETE", color = Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.sp)
+                Text(if (stillOwner) "LIVE OWNERSHIP" else "REIGN COMPLETE", color = Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
                 CircleAction("×", onClose)
             }
             Spacer(Modifier.height(20.dp))
             VictorySeal()
             Spacer(Modifier.height(18.dp))
-            Text(if (stillOwner) "YOU OWN ONE." else "YOUR REIGN\nIS HISTORY.", color = Paper, fontWeight = FontWeight.Black, fontSize = 46.sp, lineHeight = 43.sp, letterSpacing = (-2.sp))
-            Text(if (stillOwner) "You took the screen. It’s yours." else "The screen moved on. Your proof remains.", color = Muted, fontFamily = mono, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+            Text(if (stillOwner) "YOU OWN ONE." else "YOUR REIGN\nIS HISTORY.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 46.sp, lineHeight = 43.sp, letterSpacing = (-2.sp))
+            Text(if (stillOwner) "You took the screen. It’s yours." else "The screen moved on. Your proof remains.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             Spacer(Modifier.height(20.dp))
-            Text("YOUR LIVE MESSAGE", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = .8.sp)
+            Text("YOUR LIVE MESSAGE", color = Muted, fontFamily = mono, fontSize = 12.sp, letterSpacing = .8.sp)
             Box(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).background(InkRaised).border(1.dp, Acid.copy(alpha = .65f), RoundedCornerShape(8.dp)).padding(17.dp)) {
                 Text(resolved.message, color = Paper, fontWeight = FontWeight.Black, fontSize = 20.sp, lineHeight = 23.sp)
             }
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = .34f)).border(1.dp, Color.White.copy(alpha = .15f), RoundedCornerShape(8.dp)).padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                ReceiptMetric(if (stillOwner) "04:59" else formatDuration(duration.toLong()), if (stillOwner) "PROTECTION" else "REIGN", Modifier.weight(1f))
+                ReceiptMetric(if (stillOwner) formatDuration(((world.reign.protectedUntilMillis - System.currentTimeMillis()) / 1000).coerceAtLeast(0)) else formatDuration(duration.toLong()), if (stillOwner) "PROTECTION" else "REIGN", Modifier.weight(1f))
                 Box(Modifier.width(1.dp).height(48.dp).background(Color.White.copy(alpha = .14f)))
                 ReceiptMetric(formatNumber(total), "VERIFIED VIEWS", Modifier.weight(1f))
             }
@@ -1463,7 +1499,7 @@ private fun ReceiptOverlay(
             PrimaryButton(if (stillOwner) "GO LIVE  ((•))" else "WATCH LIVE", Acid, onClose)
             Spacer(Modifier.height(10.dp))
             Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onShare), color = Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .18f))) {
-                Text("SHARE THE PROOF  ↗", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(15.dp))
+                Text("SHARE THE PROOF  ↗", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(15.dp))
             }
         }
     }
@@ -1474,10 +1510,10 @@ private fun VictorySeal() {
     Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
         Box(Modifier.size(164.dp).border(2.dp, Acid, CircleShape), contentAlignment = Alignment.Center) {
             Box(Modifier.size(116.dp).border(1.dp, Acid.copy(alpha = .7f), CircleShape), contentAlignment = Alignment.Center) {
-                Text("1", color = Acid, fontWeight = FontWeight.Black, fontSize = 78.sp, letterSpacing = (-5).sp)
+                Text("1", color = Acid, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 78.sp, letterSpacing = (-5).sp)
             }
-            Text("YOU OWN ONE", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp, letterSpacing = 1.sp, modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp))
-            Text("THE WORLD IS WATCHING", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 6.sp, letterSpacing = .7.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
+            Text("YOU OWN ONE", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp, modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp))
+            Text("THE WORLD IS WATCHING", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = .7.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
         }
     }
 }
@@ -1514,7 +1550,7 @@ private fun ComposeOverlay(
     ) {
         OverlayHeader("COMPOSE", "PRE-CLEAR BEFORE BIDDING", onClose)
         Spacer(Modifier.height(26.dp))
-        Text("SAY ONE THING\nWORTH STEALING.", color = Paper, fontWeight = FontWeight.Black, fontSize = 42.sp, lineHeight = 40.sp, letterSpacing = (-1.5).sp)
+        Text("SAY ONE THING\nWORTH STEALING.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 42.sp, lineHeight = 40.sp, letterSpacing = (-1.5).sp)
         Spacer(Modifier.height(20.dp))
         Box(
             Modifier
@@ -1526,16 +1562,16 @@ private fun ComposeOverlay(
                 .padding(18.dp),
         ) {
             if (ui.composeText.isEmpty()) {
-                Text("THE WHOLE WORLD WILL SEE…", color = Muted.copy(alpha = .55f), fontWeight = FontWeight.Black, fontSize = 27.sp, lineHeight = 30.sp)
+                Text("THE WHOLE WORLD WILL SEE…", color = Muted.copy(alpha = .55f), fontWeight = FontWeight.Black, fontFamily = display, fontSize = 27.sp, lineHeight = 30.sp)
             }
             BasicTextField(
                 value = ui.composeText,
                 onValueChange = onTextChanged,
-                textStyle = TextStyle(color = Paper, fontWeight = FontWeight.Black, fontSize = 27.sp, lineHeight = 30.sp),
+                textStyle = TextStyle(color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 27.sp, lineHeight = 30.sp),
                 modifier = Modifier.fillMaxSize(),
                 cursorBrush = Brush.verticalGradient(listOf(Acid, Acid)),
             )
-            Text("$remaining", color = if (remaining < 0) Orange else Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 10.sp, modifier = Modifier.align(Alignment.BottomEnd))
+            Text("$remaining", color = if (remaining < 0) Orange else Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.align(Alignment.BottomEnd))
         }
         ui.composeError?.let {
             Spacer(Modifier.height(10.dp))
@@ -1557,7 +1593,7 @@ private fun ComposeOverlay(
             Text("SUBMIT FOR APPROVAL  →", fontWeight = FontWeight.Black, fontSize = 12.sp)
         }
         Spacer(Modifier.height(12.dp))
-        Text("Approval happens before the live battle. A takeover never waits for moderation.", color = Muted, fontFamily = mono, textAlign = TextAlign.Center, fontSize = 8.sp, lineHeight = 12.sp, modifier = Modifier.fillMaxWidth())
+        Text("Approval happens before the live battle. A takeover never waits for moderation.", color = Muted, fontFamily = mono, textAlign = TextAlign.Center, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -1580,10 +1616,10 @@ private fun VaultOverlay(
     ) {
         OverlayHeader("‹", if (revenueCatReady) "LIVE STORE" else "STORE OFFLINE", onClose)
         Spacer(Modifier.height(24.dp))
-        Text("REVENGE TICKETS.", color = Paper, fontWeight = FontWeight.Black, fontSize = 43.sp, lineHeight = 40.sp, letterSpacing = (-1.8).sp)
-        Text("Skip your cooldown. Take ONE back now.", color = Muted, fontFamily = mono, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+        Text("REVENGE TICKETS.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 40.sp, letterSpacing = (-1.8).sp)
+        Text("Skip your cooldown. Take ONE back now.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
         Box(Modifier.fillMaxWidth().padding(vertical = 18.dp).height(1.dp).background(Color.White.copy(alpha = .14f)))
-        Text("YOUR BALANCE", color = Muted, fontFamily = mono, fontSize = 8.sp)
+        Text("YOUR BALANCE", color = Muted, fontFamily = mono, fontSize = 12.sp)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp, bottom = 20.dp)) {
             Text("🎟", fontSize = 27.sp)
             Spacer(Modifier.width(12.dp))
@@ -1596,10 +1632,10 @@ private fun VaultOverlay(
         Spacer(Modifier.height(11.dp))
         CreditPack("♛", "HEADLINER", 50, "£9.99", Orange) { onPurchase(50) }
         Spacer(Modifier.height(22.dp))
-        Text("PURCHASES ARE PROCESSED BY GOOGLE PLAY AND VERIFIED SERVER-SIDE BEFORE TICKETS ARE ADDED.", color = Muted, fontFamily = mono, fontSize = 7.sp, lineHeight = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text("PURCHASES ARE PROCESSED BY GOOGLE PLAY AND VERIFIED SERVER-SIDE BEFORE TICKETS ARE ADDED.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(14.dp))
         Surface(modifier = Modifier.fillMaxWidth().clickable(enabled = revenueCatReady, onClick = onRestore), color = Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .16f))) {
-            Text("↻  RESTORE GOOGLE PLAY PURCHASES", color = if (revenueCatReady) Paper else Muted, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(16.dp))
+            Text("↻  RESTORE GOOGLE PLAY PURCHASES", color = if (revenueCatReady) Paper else Muted, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
         }
     }
 }
@@ -1622,12 +1658,12 @@ private fun ReportOverlay(
     ) {
         OverlayHeader("SAFETY", "PUBLIC UGC CONTROL", onClose)
         Spacer(Modifier.height(30.dp))
-        Text("REPORT THE\nLIVE MESSAGE.", color = Paper, fontWeight = FontWeight.Black, fontSize = 43.sp, lineHeight = 40.sp)
-        Text("Reports enter the global moderation queue. Blocking immediately hides this person and their future content from you.", color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 12.dp, bottom = 22.dp))
+        Text("REPORT THE\nLIVE MESSAGE.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 40.sp)
+        Text("Reports enter the global moderation queue. Blocking immediately hides this person and their future content from you.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 12.dp, bottom = 22.dp))
         listOf("HATE OR HARASSMENT", "THREAT OR VIOLENCE", "PERSONAL INFORMATION", "SCAM OR IMPERSONATION", "OTHER").forEach { reason ->
             Surface(modifier = Modifier.fillMaxWidth().padding(bottom = 9.dp).clickable { onReport(reason) }, color = InkRaised, shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .07f))) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(reason, color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                    Text(reason, color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     Text("→", color = Orange, fontWeight = FontWeight.Black)
                 }
             }
@@ -1635,11 +1671,11 @@ private fun ReportOverlay(
         Spacer(Modifier.height(10.dp))
         if (canBlock) {
             Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onBlock), color = Orange.copy(alpha = .12f), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, Orange.copy(alpha = .4f))) {
-                Text("BLOCK $owner", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(16.dp))
+                Text("BLOCK $owner", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
             }
         }
         Spacer(Modifier.weight(1f))
-        Text("Safety contact: oneglobalscreen@gmail.com", color = Muted, fontFamily = mono, fontSize = 8.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+        Text("Safety contact: oneglobalscreen@gmail.com", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
     }
 }
 
@@ -1665,10 +1701,10 @@ private fun FeedbackOverlay(
     ) {
         OverlayHeader("FEEDBACK", "REAL TESTER NOTES", onClose)
         Spacer(Modifier.height(28.dp))
-        Text("MAKE ONE\nBETTER.", color = Paper, fontWeight = FontWeight.Black, fontSize = 43.sp, lineHeight = 40.sp, letterSpacing = (-1.6).sp)
-        Text("Your note is attached to your anonymous ONE account so we can investigate without collecting your name or email.", color = Muted, fontFamily = mono, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 12.dp))
+        Text("MAKE ONE\nBETTER.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 40.sp, letterSpacing = (-1.6).sp)
+        Text("Your note is attached to your anonymous ONE account so we can investigate without collecting your name or email.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 12.dp))
         Spacer(Modifier.height(22.dp))
-        Text("WHAT TYPE OF NOTE?", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, letterSpacing = 1.sp)
+        Text("WHAT TYPE OF NOTE?", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
         Spacer(Modifier.height(9.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             categories.forEach { category ->
@@ -1679,7 +1715,7 @@ private fun FeedbackOverlay(
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, if (selected) Acid else Color.White.copy(alpha = .1f)),
                 ) {
-                    Text(category, color = if (selected) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp))
+                    Text(category, color = if (selected) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp))
                 }
             }
         }
@@ -1703,7 +1739,7 @@ private fun FeedbackOverlay(
                 modifier = Modifier.fillMaxSize(),
                 cursorBrush = Brush.verticalGradient(listOf(Acid, Acid)),
             )
-            Text("$remaining", color = if (remaining < 0) Orange else Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 10.sp, modifier = Modifier.align(Alignment.BottomEnd))
+            Text("$remaining", color = if (remaining < 0) Orange else Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.align(Alignment.BottomEnd))
         }
         Spacer(Modifier.height(18.dp))
         Button(
@@ -1716,7 +1752,7 @@ private fun FeedbackOverlay(
             Text(if (ui.feedbackSending) "SENDING..." else "SEND TO THE ONE TEAM  ->", fontWeight = FontWeight.Black, fontSize = 12.sp)
         }
         Spacer(Modifier.height(12.dp))
-        Text("Please do not include passwords, payment details, or private information.", color = Muted, fontFamily = mono, textAlign = TextAlign.Center, fontSize = 8.sp, lineHeight = 12.sp, modifier = Modifier.fillMaxWidth())
+        Text("Please do not include passwords, payment details, or private information.", color = Muted, fontFamily = mono, textAlign = TextAlign.Center, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -1738,20 +1774,20 @@ private fun DeleteAccountOverlay(
     ) {
         OverlayHeader("PRIVACY", "IRREVERSIBLE ACTION", onClose)
         Spacer(Modifier.height(30.dp))
-        Text("DELETE YOUR\nONE IDENTITY.", color = Paper, fontWeight = FontWeight.Black, fontSize = 43.sp, lineHeight = 40.sp)
+        Text("DELETE YOUR\nONE IDENTITY.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 40.sp)
         Text(
             "This permanently deletes your anonymous account, handle, message library, reactions, reports, tickets and device session. Past reigns remain only as anonymised @DELETED ledger entries so the global record cannot be rewritten.",
             color = Muted,
             fontFamily = mono,
-            fontSize = 10.sp,
+            fontSize = 12.sp,
             lineHeight = 16.sp,
             modifier = Modifier.padding(top = 14.dp),
         )
         Spacer(Modifier.height(24.dp))
         Surface(color = Orange.copy(alpha = .1f), shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, Orange.copy(alpha = .38f))) {
             Column(Modifier.padding(18.dp)) {
-                Text("NO UNDO. NO RECOVERY.", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp)
-                Text("ONE will create a completely new anonymous identity after deletion so the app can reopen safely.", color = Paper, fontFamily = mono, fontSize = 9.sp, lineHeight = 14.sp, modifier = Modifier.padding(top = 8.dp))
+                Text("NO UNDO. NO RECOVERY.", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                Text("ONE will create a completely new anonymous identity after deletion so the app can reopen safely.", color = Paper, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 8.dp))
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -1762,14 +1798,14 @@ private fun DeleteAccountOverlay(
             colors = ButtonDefaults.buttonColors(containerColor = Orange, contentColor = Ink, disabledContainerColor = Orange.copy(alpha = .35f)),
             shape = RoundedCornerShape(16.dp),
         ) {
-            Text(if (deleting) "DELETING SECURELY..." else "PERMANENTLY DELETE ACCOUNT", fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp)
+            Text(if (deleting) "DELETING SECURELY..." else "PERMANENTLY DELETE ACCOUNT", fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
         }
         Spacer(Modifier.height(12.dp))
         Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onHelp), color = InkRaised, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .08f))) {
-            Text("OPEN DELETION HELP", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 9.sp, modifier = Modifier.padding(16.dp))
+            Text("OPEN DELETION HELP", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
         }
         Spacer(Modifier.height(18.dp))
-        Text("Questions: oneglobalscreen@gmail.com", color = Muted, fontFamily = mono, fontSize = 8.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+        Text("Questions: oneglobalscreen@gmail.com", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
     }
 }
 
@@ -1860,7 +1896,7 @@ private fun TakeoverFlash(modifier: Modifier = Modifier) {
         alpha.animateTo(0f, tween(480))
     }
     Box(modifier.background(Acid.copy(alpha = alpha.value)), contentAlignment = Alignment.Center) {
-        Text("ONE", color = Ink.copy(alpha = alpha.value), fontWeight = FontWeight.Black, fontSize = 96.sp, letterSpacing = (-6).sp, modifier = Modifier.scale(scale.value))
+        Text("ONE", color = Ink.copy(alpha = alpha.value), fontWeight = FontWeight.Black, fontFamily = display, fontSize = 96.sp, letterSpacing = (-6).sp, modifier = Modifier.scale(scale.value))
     }
 }
 
@@ -1909,7 +1945,7 @@ private fun ProtocolProgress(phase: ChallengePhase, status: String) {
     val steps = listOf(ChallengePhase.RESERVING, ChallengePhase.VERIFYING, ChallengePhase.SPENDING, ChallengePhase.COMMITTING)
     val current = steps.indexOf(phase).coerceAtLeast(0)
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = .45f)).border(1.dp, Acid.copy(alpha = .3f), RoundedCornerShape(18.dp)).padding(16.dp)) {
-        Text(status, color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp)
+        Text(status, color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             steps.forEachIndexed { index, _ ->
@@ -1917,32 +1953,32 @@ private fun ProtocolProgress(phase: ChallengePhase, status: String) {
             }
         }
         Spacer(Modifier.height(10.dp))
-        Text("IDEMPOTENCY KEY  ${System.currentTimeMillis().toString().takeLast(8)}", color = Muted, fontFamily = mono, fontSize = 7.sp)
+        Text("IDEMPOTENCY KEY  ${System.currentTimeMillis().toString().takeLast(8)}", color = Muted, fontFamily = mono, fontSize = 12.sp)
     }
 }
 
 @Composable
 private fun WonPanel(message: String) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Acid).padding(19.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("YOU TOOK ONE", color = Ink, fontWeight = FontWeight.Black, fontSize = 27.sp)
-        Text("“$message”", color = Ink.copy(alpha = .72f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 9.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 7.dp))
+        Text("YOU TOOK ONE", color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 27.sp)
+        Text("“$message”", color = Ink.copy(alpha = .72f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 7.dp))
     }
 }
 
 @Composable
 private fun RaceCard(world: WorldState) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(InkRaised).border(1.dp, Orange.copy(alpha = .5f), RoundedCornerShape(6.dp)).padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-        OwnerMark(world.reign.owner.initials, palette(world.reign.palette))
+        ProfilePhoto(world.reign.owner, palette(world.reign.palette), Modifier.size(44.dp))
         Spacer(Modifier.width(11.dp))
         Column(Modifier.weight(1f)) {
             Text(world.reign.owner.handle, color = Paper, fontWeight = FontWeight.Black, fontSize = 13.sp)
-            Text("CURRENT OWNER", color = Muted, fontFamily = mono, fontSize = 7.sp)
+            Text("CURRENT OWNER", color = Muted, fontFamily = mono, fontSize = 12.sp)
         }
         Text("→", color = Muted, fontSize = 20.sp)
         Spacer(Modifier.width(10.dp))
         Column(horizontalAlignment = Alignment.End) {
             Text("YOU", color = Acid, fontWeight = FontWeight.Black, fontSize = 13.sp)
-            Text(if (world.cooldownRemainingSeconds > 0) "REVENGE" else "FREE STEAL", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp)
+            Text(if (world.cooldownRemainingSeconds > 0) "REVENGE" else "FREE STEAL", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
         }
     }
 }
@@ -1961,7 +1997,7 @@ private fun SelectableMessage(message: OneMessage, selected: Boolean, onClick: (
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Text("“${message.text}”", color = if (selected) Ink else Paper, fontWeight = FontWeight.Black, fontSize = 15.sp, lineHeight = 18.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
-        Text(if (selected) "SELECTED  ◆" else "APPROVED", color = if (selected) Ink.copy(alpha = .6f) else Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 7.sp)
+        Text(if (selected) "SELECTED  ◆" else "APPROVED", color = if (selected) Ink.copy(alpha = .6f) else Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
     }
 }
 
@@ -1970,15 +2006,15 @@ private fun HallHero(entry: HallEntry) {
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(Brush.linearGradient(listOf(Acid, Color(0xFFB9E800)))).padding(20.dp)) {
         Column {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("#01 // TODAY", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp)
-                Text(formatDuration(entry.reignSeconds.toLong()), color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                Text("#01 // TODAY", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                Text(formatDuration(entry.reignSeconds.toLong()), color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
             }
             Spacer(Modifier.height(26.dp))
-            Text("“${entry.message}”", color = Ink, fontWeight = FontWeight.Black, fontSize = 27.sp, lineHeight = 29.sp)
+            Text("“${entry.message}”", color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 27.sp, lineHeight = 29.sp)
             Spacer(Modifier.height(23.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(entry.owner.handle, color = Ink, fontWeight = FontWeight.Black, fontSize = 15.sp)
-                Text("${formatNumber(entry.verifiedViews)} VIEWS", color = Ink.copy(alpha = .7f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp)
+                Text("${formatNumber(entry.verifiedViews)} VIEWS", color = Ink.copy(alpha = .7f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
         }
     }
@@ -2015,16 +2051,15 @@ private fun HallRow(entry: HallEntry, isCurrentUser: Boolean = false) {
         }
         Row(Modifier.fillMaxSize().border(0.5.dp, Color.White.copy(alpha = .08f)).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(entry.rank.toString(), color = if (isCurrentUser) Ink else rankColor, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.width(28.dp))
-            Box(Modifier.size(36.dp).clip(CircleShape).background(if (isCurrentUser) Ink else rankColor.copy(alpha = .18f)), contentAlignment = Alignment.Center) {
-                Text(entry.owner.initials, color = if (isCurrentUser) Acid else rankColor, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
-            }
+            ProfilePhoto(entry.owner, if (isCurrentUser) Ink else rankColor, Modifier.size(42.dp))
             Spacer(Modifier.width(9.dp))
             Column(Modifier.weight(1f)) {
-                Text(entry.owner.handle, color = if (isCurrentUser) Ink else Paper, fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1)
-                Text("${entry.owner.city.uppercase()}, ${entry.owner.countryCode}", color = if (isCurrentUser) Ink.copy(alpha = .65f) else Muted, fontFamily = mono, fontSize = 6.sp)
+                Text(entry.owner.handle, color = if (isCurrentUser) Ink else Paper, fontWeight = FontWeight.Black, fontSize = 12.sp, maxLines = 1)
+                Text(entry.owner.locationLabel(), color = if (isCurrentUser) Ink.copy(alpha = .65f) else Muted, fontFamily = mono, fontSize = 12.sp)
             }
-            Text(formatDuration(entry.reignSeconds.toLong()), color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, modifier = Modifier.width(70.dp), textAlign = TextAlign.End)
-            Text(formatNumber(entry.verifiedViews), color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, modifier = Modifier.width(62.dp), textAlign = TextAlign.End)
+            Text(formatDuration(entry.reignSeconds.toLong()), color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.width(90.dp), textAlign = TextAlign.End)
+            Text(entry.takeovers?.toString() ?: "—", color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.width(90.dp), textAlign = TextAlign.End)
+            Text(formatNumber(entry.verifiedViews), color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.width(62.dp), textAlign = TextAlign.End)
         }
     }
 }
@@ -2033,7 +2068,7 @@ private fun HallRow(entry: HallEntry, isCurrentUser: Boolean = false) {
 private fun YourRankDivider() {
     Row(Modifier.fillMaxWidth().padding(top = 13.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f).height(1.dp).background(Acid.copy(alpha = .55f)))
-        Text("YOUR RANK", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 7.sp, letterSpacing = 1.sp, modifier = Modifier.padding(horizontal = 10.dp))
+        Text("YOUR RANK", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp, modifier = Modifier.padding(horizontal = 10.dp))
         Box(Modifier.weight(1f).height(1.dp).background(Acid.copy(alpha = .55f)))
     }
 }
@@ -2043,14 +2078,14 @@ private fun WalletHero(credits: Int, onClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(Brush.linearGradient(listOf(Color(0xFF27272E), Color(0xFF111115)))).border(1.dp, Acid.copy(alpha = .42f), RoundedCornerShape(7.dp)).clickable(onClick = onClick).padding(19.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("ONE VAULT", color = Muted, fontFamily = mono, fontSize = 8.sp, letterSpacing = 1.1.sp)
+                Text("ONE VAULT", color = Muted, fontFamily = mono, fontSize = 12.sp, letterSpacing = 1.1.sp)
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text(formatNumber(credits), color = Paper, fontWeight = FontWeight.Black, fontSize = 39.sp, letterSpacing = (-1).sp)
-                    Text(" TICKETS", color = Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 9.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    Text(formatNumber(credits), color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 39.sp, letterSpacing = (-1).sp)
+                    Text(" TICKETS", color = Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
                 }
             }
             Box(Modifier.size(50.dp).clip(CircleShape).background(Acid), contentAlignment = Alignment.Center) {
-                Text("+", color = Ink, fontWeight = FontWeight.Black, fontSize = 24.sp)
+                Text("+", color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 24.sp)
             }
         }
     }
@@ -2065,12 +2100,12 @@ private fun DailyCapCard(world: WorldState) {
                 drawCircle(Color.White.copy(alpha = .08f), style = Stroke(5.dp.toPx()))
                 drawArc(Acid, -90f, progress.coerceIn(0f, 1f) * 360f, false, style = Stroke(5.dp.toPx(), cap = StrokeCap.Round))
             }
-            Text(if (world.cooldownRemainingSeconds == 0) "GO" else "${world.cooldownRemainingSeconds}s", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+            Text(if (world.cooldownRemainingSeconds == 0) "GO" else "${world.cooldownRemainingSeconds}s", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
         }
         Spacer(Modifier.width(14.dp))
         Column {
             Text("FREE STEAL CHARGE", color = Paper, fontWeight = FontWeight.Black, fontSize = 14.sp)
-            Text(if (world.cooldownRemainingSeconds == 0) "Ready now. Your next takeover costs nothing." else "Wait or spend one Revenge Ticket to move instantly.", color = Muted, fontFamily = mono, fontSize = 8.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(if (world.cooldownRemainingSeconds == 0) "Ready now. Your next takeover costs nothing." else "Wait or spend one Revenge Ticket to move instantly.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
@@ -2086,14 +2121,14 @@ private fun SettingsCard(title: String, detail: String, badge: String, accent: C
         title.contains("DELETE") -> "×"
         else -> "●"
     }
-    Row(Modifier.fillMaxWidth().height(76.dp).clip(RoundedCornerShape(7.dp)).background(InkRaised).border(1.dp, Color.White.copy(alpha = .11f), RoundedCornerShape(7.dp)).clickable(onClick = onClick).padding(horizontal = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 90.dp).clip(RoundedCornerShape(7.dp)).background(InkRaised).border(1.dp, Color.White.copy(alpha = .11f), RoundedCornerShape(7.dp)).clickable(onClick = onClick).padding(horizontal = 15.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(36.dp).clip(CircleShape).border(1.dp, accent.copy(alpha = .7f), CircleShape), contentAlignment = Alignment.Center) {
             Text(icon, color = accent, fontWeight = FontWeight.Black, fontSize = 15.sp)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(title, color = Paper, fontWeight = FontWeight.Black, fontSize = 12.sp)
-            Text(detail, color = Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 12.sp, modifier = Modifier.padding(top = 3.dp))
+            Text(detail, color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 3.dp))
         }
         Text(badge, color = accent, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = if (badge == "›") 22.sp else 8.sp)
     }
@@ -2106,11 +2141,11 @@ private fun CreditPack(icon: String, name: String, amount: Int, price: String, c
             Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)).background(color).padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(icon, color = Ink, fontWeight = FontWeight.Black, fontSize = 34.sp)
+            Text(icon, color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 34.sp)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(name, color = Ink, fontWeight = FontWeight.Black, fontSize = 20.sp)
-                Text("${formatNumber(amount)} TICKETS", color = Ink.copy(alpha = .76f), fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp))
+                Text("${formatNumber(amount)} TICKETS", color = Ink.copy(alpha = .76f), fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
             }
             Canvas(Modifier.width(1.dp).height(72.dp)) {
                 val dash = 5.dp.toPx()
@@ -2130,38 +2165,38 @@ private fun CreditPack(icon: String, name: String, amount: Int, price: String, c
 @Composable
 private fun RuleStrip(vararg rules: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        rules.forEach { rule -> Text("• ${rule.uppercase()}", color = Muted, fontFamily = mono, fontSize = 6.sp) }
+        rules.forEach { rule -> Text("• ${rule.uppercase()}", color = Muted, fontFamily = mono, fontSize = 12.sp) }
     }
 }
 
 @Composable
 private fun SafetyCard() {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Orange.copy(alpha = .08f)).border(1.dp, Orange.copy(alpha = .23f), RoundedCornerShape(18.dp)).padding(15.dp)) {
-        Text("SAFETY IS PART OF THE PRODUCT", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
-        Text("On-device pre-filter + server review + reporting + account bans + emergency global removal.", color = Muted, fontFamily = mono, fontSize = 8.sp, lineHeight = 13.sp, modifier = Modifier.padding(top = 6.dp))
+        Text("SAFETY IS PART OF THE PRODUCT", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
+        Text("On-device pre-filter + server review + reporting + account bans + emergency global removal.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 6.dp))
     }
 }
 
 @Composable
 private fun ScreeningRow(text: String, passed: Boolean) {
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(text, color = if (passed) Paper else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 9.sp)
-        Text(if (passed) "PASS  ◆" else "WAIT", color = if (passed) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp)
+        Text(text, color = if (passed) Paper else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(if (passed) "PASS  ◆" else "WAIT", color = if (passed) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
     }
 }
 
 @Composable
 private fun StatBlock(value: String, label: String, modifier: Modifier = Modifier) {
     Column(modifier.height(112.dp).clip(RoundedCornerShape(19.dp)).background(InkRaised).padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = Muted, fontFamily = mono, fontSize = 7.sp)
-        Text(value, color = Paper, fontWeight = FontWeight.Black, fontSize = 29.sp)
+        Text(label, color = Muted, fontFamily = mono, fontSize = 12.sp)
+        Text(value, color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 29.sp)
     }
 }
 
 @Composable
 private fun ErrorStrip(text: String) {
     Surface(color = Orange.copy(alpha = .12f), shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, Orange.copy(alpha = .35f))) {
-        Text(text, color = Orange, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(11.dp))
+        Text(text, color = Orange, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(11.dp))
     }
 }
 
@@ -2176,7 +2211,7 @@ private fun RevengeBanner(text: String, onOpen: () -> Unit, onDismiss: () -> Uni
             .padding(horizontal = 22.dp, vertical = 16.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("⚡  DETHRONED", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.sp)
+            Text("⚡  DETHRONED", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
             CircleActionDark("×", onDismiss)
         }
 
@@ -2195,8 +2230,8 @@ private fun RevengeBanner(text: String, onOpen: () -> Unit, onDismiss: () -> Uni
             color = Ink,
             fontFamily = mono,
             fontWeight = FontWeight.Black,
-            fontSize = 10.sp,
-            lineHeight = 15.sp,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
         )
 
         Spacer(Modifier.weight(1f))
@@ -2217,7 +2252,7 @@ private fun RevengeBanner(text: String, onOpen: () -> Unit, onDismiss: () -> Uni
             color = Ink.copy(alpha = .68f),
             fontFamily = mono,
             fontWeight = FontWeight.Black,
-            fontSize = 7.sp,
+            fontSize = 12.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
         )
@@ -2227,7 +2262,7 @@ private fun RevengeBanner(text: String, onOpen: () -> Unit, onDismiss: () -> Uni
 @Composable
 private fun ToastBar(text: String) {
     Surface(color = Paper, shape = RoundedCornerShape(14.dp), shadowElevation = 10.dp) {
-        Text(text, color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 8.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp))
+        Text(text, color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp))
     }
 }
 
@@ -2237,9 +2272,9 @@ private fun SectionHeader(left: String, right: String) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).clip(CircleShape).background(Acid))
             Spacer(Modifier.width(7.dp))
-            Text(left, color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.sp)
+            Text(left, color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
         }
-        Text(right, color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 8.sp)
+        Text(right, color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
     }
 }
 
@@ -2247,8 +2282,8 @@ private fun SectionHeader(left: String, right: String) {
 private fun OverlayHeader(left: String, right: String, onClose: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column {
-            Text(left, color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp)
-            Text(right, color = Muted, fontFamily = mono, fontSize = 7.sp, modifier = Modifier.padding(top = 2.dp))
+            Text(left, color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
+            Text(right, color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
         CircleAction("×", onClose)
     }
@@ -2265,7 +2300,7 @@ private fun OneLogo(color: Color, compact: Boolean) {
 @Composable
 private fun OwnerMark(initials: String, accent: Color) {
     Box(Modifier.size(40.dp).clip(CircleShape).background(accent.copy(alpha = .15f)).border(1.dp, accent.copy(alpha = .65f), CircleShape), contentAlignment = Alignment.Center) {
-        Text(initials, color = accent, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp)
+        Text(initials, color = accent, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
     }
 }
 
@@ -2286,7 +2321,7 @@ private fun OwnerMarkLarge(initials: String, accent: Color) {
 @Composable
 private fun CircleAction(text: String, onClick: () -> Unit) {
     Box(Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = .06f)).border(1.dp, Color.White.copy(alpha = .08f), CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Text(text, color = Paper, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Text(text, color = Paper, fontWeight = FontWeight.Bold, fontSize = 12.sp)
     }
 }
 
@@ -2300,8 +2335,8 @@ private fun CircleActionDark(text: String, onClick: () -> Unit) {
 @Composable
 private fun LedgerMetric(label: String, value: Int, color: Color) {
     Column(horizontalAlignment = Alignment.End) {
-        Text(formatNumber(value), color = color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 11.sp)
-        Text(label, color = Muted, fontFamily = mono, fontSize = 7.sp)
+        Text(formatNumber(value), color = color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
+        Text(label, color = Muted, fontFamily = mono, fontSize = 12.sp)
     }
 }
 
@@ -2309,21 +2344,21 @@ private fun LedgerMetric(label: String, value: Int, color: Color) {
 private fun ReceiptMetric(value: String, label: String, modifier: Modifier = Modifier, dark: Boolean = false) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, color = if (dark) Ink else Paper, fontWeight = FontWeight.Black, fontSize = 17.sp)
-        Text(label, color = if (dark) Ink.copy(alpha = .62f) else Muted, fontFamily = mono, fontSize = 6.sp)
+        Text(label, color = if (dark) Ink.copy(alpha = .62f) else Muted, fontFamily = mono, fontSize = 12.sp)
     }
 }
 
 @Composable
 private fun StatusPill(text: String, color: Color) {
     Surface(color = color.copy(alpha = .13f), shape = RoundedCornerShape(5.dp), border = BorderStroke(1.dp, color.copy(alpha = .35f))) {
-        Text(text, color = color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 7.sp, letterSpacing = .6.sp, modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp))
+        Text(text, color = color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = .6.sp, modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp))
     }
 }
 
 @Composable
 private fun PrimaryButton(text: String, color: Color, onClick: () -> Unit, foreground: Color = Ink) {
     Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = foreground), shape = RoundedCornerShape(6.dp)) {
-        Text(text, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = .3.sp)
+        Text(text, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = .3.sp)
     }
 }
 

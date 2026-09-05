@@ -362,6 +362,15 @@ class DemoOneRepository : OneRepository {
         _events.emit(OneEvent.AccountDeleted)
     }
 
+    override suspend fun updateProfile(city: String, countryCode: String) {
+        user = user.copy(city = city, countryCode = countryCode)
+        _world.value = _world.value.copy(currentUser = user)
+    }
+
+    override suspend fun updatePhoto(jpeg: ByteArray?) {
+        error("Profile photos require a connected account.")
+    }
+
     override suspend fun react(reaction: String) {
         _world.update { current ->
             current.copy(

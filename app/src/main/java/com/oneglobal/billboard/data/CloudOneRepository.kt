@@ -201,6 +201,20 @@ class CloudOneRepository(context: Context) : OneRepository {
         }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
     }
 
+    override suspend fun updateProfile(city: String, countryCode: String) {
+        rpc("update_profile_details", JSONObject().put("p_city", city).put("p_country_code", countryCode), true)
+        hallRefreshAt = 0L
+        refreshWorld()
+    }
+
+    override suspend fun updatePhoto(jpeg: ByteArray?) {
+        require(jpeg == null || jpeg.size <= 75_000) { "Please choose a smaller photo." }
+        val encoded = jpeg?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
+        rpc("set_profile_photo", JSONObject().put("p_photo", encoded ?: JSONObject.NULL), true)
+        hallRefreshAt = 0L
+        refreshWorld()
+    }
+
     override suspend fun react(reaction: String) {
         runCatching {
             rpc("react_to_one", JSONObject().put("p_reaction", reaction), authenticated = true)
@@ -291,8 +305,8 @@ class CloudOneRepository(context: Context) : OneRepository {
             hallRefreshAt = now
         }
         next = next.copy(
-            hallToday = cachedHallToday.ifEmpty { next.hall },
-            hallAllTime = cachedHallAllTime.ifEmpty { next.hall },
+            hallToday = cachedHallToday,
+            hallAllTime = cachedHallAllTime,
             hallAllTimeLive = hallAllTimeLive,
         )
         _world.value = next
@@ -429,7 +443,7 @@ class CloudOneRepository(context: Context) : OneRepository {
                 reignSeconds = item.optInt("reign_seconds"),
                 verifiedViews = item.optInt("verified_views"),
             )
-        }.ifEmpty { listOf(placeholderHall(owner, message)) }
+        }
 
         return WorldState(
             reign = Reign(
@@ -476,6 +490,10 @@ class CloudOneRepository(context: Context) : OneRepository {
             },
             currentContentBlocked = json.optBoolean("current_content_blocked"),
             blockedCount = json.optInt("blocked_count"),
+            reactionCounts = json.optJSONObject("reaction_counts")?.let { counts -> counts.keys().asSequence().associateWith { counts.optInt(it) } },
+            userTakeovers = json.optJSONObject("user_stats")?.optInt("takeovers"),
+            userLongestReign = json.optJSONObject("user_stats")?.optInt("longest_reign_seconds"),
+            userVerifiedViews = json.optJSONObject("user_stats")?.optInt("verified_views"),
         )
     }
 
@@ -486,6 +504,7 @@ class CloudOneRepository(context: Context) : OneRepository {
         countryCode = json.optString("country_code", "XX"),
         verified = json.optBoolean("verified"),
         initials = json.optString("initials", "ON"),
+        photoVersion = json.optString("photo_version").takeIf { it.isNotBlank() && it != "null" },
     )
 
     private fun parseMessage(json: JSONObject) = OneMessage(
@@ -507,10 +526,12 @@ class CloudOneRepository(context: Context) : OneRepository {
                     countryCode = item.optString("country_code", "XX"),
                     verified = item.optBoolean("verified"),
                     initials = item.optString("initials", "ON"),
+                    photoVersion = item.optString("photo_version").takeIf { it.isNotBlank() && it != "null" },
                 ),
                 message = item.optString("message"),
                 reignSeconds = item.optInt("reign_seconds"),
                 verifiedViews = item.optInt("verified_views"),
+                takeovers = if (item.has("takeovers")) item.optInt("takeovers") else null,
             )
         }
 

@@ -19,6 +19,7 @@ enum class Overlay {
     IDENTITY,
     DELETE_ACCOUNT,
     HOW_IT_WORKS,
+    PROFILE,
 }
 
 enum class MessageStatus {
@@ -52,6 +53,7 @@ data class OneOwner(
     val countryCode: String,
     val verified: Boolean,
     val initials: String,
+    val photoVersion: String? = null,
 )
 
 data class OneMessage(
@@ -96,6 +98,7 @@ data class HallEntry(
     val message: String,
     val reignSeconds: Int,
     val verifiedViews: Int,
+    val takeovers: Int? = null,
 )
 
 data class ReignReceipt(
@@ -142,6 +145,10 @@ data class WorldState(
     val hallToday: List<HallEntry> = emptyList(),
     val hallAllTime: List<HallEntry> = emptyList(),
     val hallAllTimeLive: Boolean = false,
+    val reactionCounts: Map<String, Int>? = null,
+    val userTakeovers: Int? = null,
+    val userLongestReign: Int? = null,
+    val userVerifiedViews: Int? = null,
 )
 
 data class OneUiState(
@@ -174,6 +181,7 @@ data class OneUiState(
     val recoveryCodeInput: String = "",
     val identityBusy: Boolean = false,
     val identityError: String? = null,
+    val profileBusy: Boolean = false,
 )
 
 sealed interface OneEvent {

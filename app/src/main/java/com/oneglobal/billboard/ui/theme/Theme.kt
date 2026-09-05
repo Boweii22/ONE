@@ -2,6 +2,10 @@ package com.oneglobal.billboard.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.Typography
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
@@ -31,6 +35,7 @@ private val oneColors = darkColorScheme(
 fun OneTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = oneColors,
+        typography = Typography(bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold), bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)),
         content = content,
     )
 }

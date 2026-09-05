@@ -26,6 +26,8 @@ interface OneRepository {
     suspend fun recoverIdentity(handle: String, code: String)
     suspend fun reclaimUnclaimedHandle(handle: String)
     suspend fun submitFeedback(category: String, text: String)
+    suspend fun updateProfile(city: String, countryCode: String)
+    suspend fun updatePhoto(jpeg: ByteArray?)
     fun start()
     fun stop()
 }
