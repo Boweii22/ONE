@@ -1,4 +1,4 @@
-# ONE identity and gameplay update — not yet release-ready
+# ONE identity and gameplay update — release checklist
 
 Implemented in Android:
 - Country-only ISO picker. Device locale suggestion, explicit toggle, no GPS or city.
@@ -8,12 +8,14 @@ Implemented in Android:
 - Map fills its message container; singular person label; visible How to play entry.
 - Challenge links resolve the current owner from the server.
 
-## Must configure before release
-1. Enable Google provider and manual identity linking in Supabase. Configure the Google web OAuth client and Android OAuth client for com.tomribowei.one with Play App Signing SHA-1.
-2. Add GOOGLE_WEB_CLIENT_ID (public identifier, not a client secret) to local.properties. It is currently missing, so the app disables the button with an honest setup message.
-3. Apply migrations 202609050001 through 202609050003 in order. They have not been remotely validated or applied: current Supabase CLI access returns 403.
-4. Verify identity ID, handle, reigns, Hall, and balance before/after Google linking, Play update, process death, Google cancellation, refresh failure and cross-device restore. Do not uninstall an unlinked identity to test upgrades.
-5. Android challenge URL handling exists, but automatic App Link opening needs the website's /.well-known/assetlinks.json using the Play signing SHA-256. Without domain verification Android may keep opening the website.
+## Completed configuration
+- Google provider and manual identity linking are enabled in Supabase. Google web and Android OAuth clients are configured for `com.tomribowei.one`.
+- `GOOGLE_WEB_CLIENT_ID` is present in local.properties. It is public and is not a client secret.
+- Migrations `202609050001` through `202609050003` have been applied by the project owner.
+
+## Must verify before release
+1. Verify identity ID, handle, reigns, Hall, and balance before/after Google linking, Play update, process death, Google cancellation, refresh failure and cross-device restore. Do not uninstall an unlinked identity to test upgrades.
+2. Android challenge URL handling exists, but automatic App Link opening needs the website's `/.well-known/assetlinks.json` using the Play signing SHA-256. Without domain verification Android may keep opening the website.
 
 ## Remaining integrations — do not advertise as shipped
 - AdMob app ID, rewarded unit ID, consent setup, RevenueCat AdMob adapter and SSV rule. Configure https://api.revenuecat.com/v1/incoming-webhooks/admob-ssv-rewarded.
