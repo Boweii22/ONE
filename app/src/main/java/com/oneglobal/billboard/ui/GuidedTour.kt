@@ -32,6 +32,7 @@ fun GuidedTourHost(
     content: @Composable (() -> Unit) -> Unit,
 ) {
     val prefs = LocalContext.current.getSharedPreferences("one_tour", Context.MODE_PRIVATE)
+    val onboardingPrefs = LocalContext.current.getSharedPreferences("one_profile_ui", Context.MODE_PRIVATE)
     var enabled by remember { mutableStateOf(prefs.getBoolean("enabled", true)) }
     var showing by remember { mutableStateOf(enabled && !prefs.getBoolean("seen", false)) }
     var step by remember { mutableIntStateOf(0) }
@@ -74,7 +75,14 @@ fun GuidedTourHost(
                     Text(item.body, color = Paper, fontSize = 16.sp, lineHeight = 23.sp, modifier = Modifier.padding(top = 12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Show first-time tips", color = Muted, modifier = Modifier.weight(1f), fontSize = 14.sp)
-                        Switch(checked = enabled, onCheckedChange = { enabled = it; prefs.edit().putBoolean("enabled", it).apply() })
+                        Switch(checked = enabled, onCheckedChange = { checked ->
+                            enabled = checked
+                            // The toggle governs both this tour and the first-run onboarding screens together:
+                            // while on, both replay from the next app open; turning it off skips both for good.
+                            prefs.edit().putBoolean("enabled", checked).putBoolean("seen", !checked).apply()
+                            onboardingPrefs.edit().putBoolean("onboarding_complete", !checked).apply()
+                            if (!checked) finish()
+                        })
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         TextButton(onClick = { finish() }) { Text("Skip", color = Paper) }

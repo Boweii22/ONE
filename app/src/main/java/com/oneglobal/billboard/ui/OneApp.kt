@@ -1,5 +1,6 @@
 package com.oneglobal.billboard.ui
 
+import androidx.compose.ui.graphics.toArgb
 import com.oneglobal.billboard.BuildConfig
 import androidx.compose.material3.TextButton
 
@@ -107,6 +108,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.oneglobal.billboard.OneViewModel
@@ -254,19 +257,6 @@ fun OneApp(
         )
 
         AnimatedVisibility(
-            visible = ui.revengeBanner != null,
-            enter = slideInVertically { -it } + fadeIn(),
-            exit = slideOutVertically { -it } + fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter),
-        ) {
-            RevengeBanner(
-                text = ui.revengeBanner.orEmpty(),
-                onOpen = viewModel::openLastReceipt,
-                onDismiss = viewModel::dismissRevenge,
-            )
-        }
-
-        AnimatedVisibility(
             visible = ui.toast != null,
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
@@ -365,6 +355,21 @@ fun OneApp(
                 )
                 Overlay.HOW_IT_WORKS -> HowItWorksOverlay(onClose = viewModel::closeOverlay)
             }
+        }
+
+        // Rendered last so a dethroning interrupts whatever screen or overlay is currently open,
+        // instead of being silently hidden behind it.
+        AnimatedVisibility(
+            visible = ui.revengeBanner != null,
+            enter = slideInVertically { -it } + fadeIn(),
+            exit = slideOutVertically { -it } + fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+            RevengeBanner(
+                world = world,
+                onOpen = viewModel::openLastReceipt,
+                onDismiss = viewModel::dismissRevenge,
+            )
         }
     }
     }
@@ -1512,13 +1517,42 @@ private fun VictorySeal(key: Any) {
         },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(164.dp).border(2.dp, Acid, CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(164.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxSize().border(2.dp, Acid, CircleShape))
+            ArcText("YOU OWN ONE", Modifier.fillMaxSize(), radius = 73.dp, color = Acid, fontSizeSp = 11f, bottom = false)
+            ArcText("THE WORLD IS WATCHING", Modifier.fillMaxSize(), radius = 73.dp, color = Acid, fontSizeSp = 11f, bottom = true)
             Box(Modifier.size(116.dp).border(1.dp, Acid.copy(alpha = .7f), CircleShape), contentAlignment = Alignment.Center) {
                 Text("1", color = Acid, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 78.sp, letterSpacing = (-5).sp)
             }
-            Text("YOU OWN ONE", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp, modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp))
-            Text("THE WORLD IS WATCHING", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = .7.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
         }
+    }
+}
+
+/** Draws [text] curved along the top or bottom half of a circle of [radius], like text on a seal. */
+@Composable
+private fun ArcText(text: String, modifier: Modifier = Modifier, radius: Dp, color: Color, fontSizeSp: Float, bottom: Boolean) {
+    val argb = color.toArgb()
+    Canvas(modifier) {
+        val paint = android.graphics.Paint().apply {
+            isAntiAlias = true
+            this.color = argb
+            this.textAlign = android.graphics.Paint.Align.LEFT
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD)
+            textSize = fontSizeSp.sp.toPx()
+            letterSpacing = 0.1f
+        }
+        val r = radius.toPx()
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val oval = android.graphics.RectF(cx - r, cy - r, cx + r, cy + r)
+        val path = android.graphics.Path().apply {
+            if (bottom) addArc(oval, 180f, -180f) else addArc(oval, 180f, 180f)
+        }
+        val pathLength = (Math.PI * r).toFloat()
+        val textWidth = paint.measureText(text)
+        val hOffset = ((pathLength - textWidth) / 2f).coerceAtLeast(0f)
+        val vOffset = if (bottom) -fontSizeSp.sp.toPx() * 0.35f else fontSizeSp.sp.toPx() * 0.15f
+        drawContext.canvas.nativeCanvas.drawTextOnPath(text, path, hOffset, vOffset, paint)
     }
 }
 
@@ -2259,7 +2293,8 @@ private fun ErrorStrip(text: String) {
 }
 
 @Composable
-private fun RevengeBanner(text: String, onOpen: () -> Unit, onDismiss: () -> Unit) {
+private fun RevengeBanner(world: WorldState, onOpen: () -> Unit, onDismiss: () -> Unit) {
+    val owner = world.reign.owner
     Column(
         Modifier
             .fillMaxSize()
@@ -2269,11 +2304,11 @@ private fun RevengeBanner(text: String, onOpen: () -> Unit, onDismiss: () -> Uni
             .padding(horizontal = 22.dp, vertical = 16.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("⚡  DETHRONED", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
+            Text("♛  DETHRONED", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
             CircleActionDark("×", onDismiss)
         }
 
-        Spacer(Modifier.height(34.dp))
+        Spacer(Modifier.height(30.dp))
         Text(
             "THEY\nTOOK\nONE.",
             color = Ink,
@@ -2282,38 +2317,60 @@ private fun RevengeBanner(text: String, onOpen: () -> Unit, onDismiss: () -> Uni
             lineHeight = 51.sp,
             letterSpacing = (-3).sp,
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(22.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ProfilePhoto(owner, Ink, Modifier.size(44.dp))
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(owner.handle, color = Ink, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                Text("TOOK THE SCREEN.", color = Ink.copy(alpha = .68f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
         Text(
-            text.uppercase(),
+            "♛  ${owner.handle} IS NOW THE OWNER.",
             color = Ink,
             fontFamily = mono,
             fontWeight = FontWeight.Black,
             fontSize = 12.sp,
-            lineHeight = 16.sp,
+            letterSpacing = .6.sp,
         )
+        Spacer(Modifier.height(18.dp))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Ink.copy(alpha = .18f)))
 
         Spacer(Modifier.weight(1f))
-        Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            ReceiptMetric("STATUS", "STOLEN", Modifier.weight(1f), dark = true)
-            ReceiptMetric("MOVE", "REVENGE", Modifier.weight(1f), dark = true)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.Black.copy(alpha = .28f))
+                .border(1.dp, Ink.copy(alpha = .22f), RoundedCornerShape(8.dp))
+                .padding(vertical = 15.dp),
+        ) {
+            ProfileStat("⬡", world.userLongestReign?.let { formatDuration(it.toLong()) } ?: "—", "LONGEST REIGN", Modifier.weight(1f))
+            Box(Modifier.width(1.dp).height(48.dp).background(Ink.copy(alpha = .2f)))
+            ProfileStat("ϟ", world.userTakeovers?.toString() ?: "—", "TAKEOVERS", Modifier.weight(1f))
+            Box(Modifier.width(1.dp).height(48.dp).background(Ink.copy(alpha = .2f)))
+            ProfileStat("◉", world.userVerifiedViews?.let(::formatNumber) ?: "—", "VERIFIED VIEWS", Modifier.weight(1f))
         }
+        Spacer(Modifier.height(16.dp))
         Button(
             onClick = onOpen,
-            colors = ButtonDefaults.buttonColors(containerColor = Ink, contentColor = Paper),
+            colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink),
             shape = RoundedCornerShape(6.dp),
             modifier = Modifier.fillMaxWidth().height(62.dp),
         ) {
             Text("⚡  TAKE IT BACK", fontWeight = FontWeight.Black, fontSize = 14.sp)
         }
-        Text(
-            "OR CLOSE TO WATCH THE NEW OWNER",
-            color = Ink.copy(alpha = .68f),
-            fontFamily = mono,
-            fontWeight = FontWeight.Black,
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
-        )
+        Spacer(Modifier.height(10.dp))
+        Button(
+            onClick = onDismiss,
+            colors = ButtonDefaults.buttonColors(containerColor = Ink, contentColor = Paper),
+            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+        ) {
+            Text("◉  WATCH LIVE", fontWeight = FontWeight.Black, fontSize = 13.sp)
+        }
     }
 }
 
