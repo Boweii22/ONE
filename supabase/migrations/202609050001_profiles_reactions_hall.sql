@@ -2,7 +2,18 @@
 -- complete current-reign reaction counts, and one Hall row per person.
 alter table public.profiles add column if not exists photo_base64 text;
 alter table public.profiles add column if not exists photo_version uuid;
-alter table public.profiles add constraint profile_photo_size check (photo_base64 is null or length(photo_base64) <= 100000);
+-- PostgreSQL does not support ADD CONSTRAINT IF NOT EXISTS. The check may
+-- already exist on projects where the profile-photo work was applied early.
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profile_photo_size'
+      and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profile_photo_size check (photo_base64 is null or length(photo_base64) <= 100000);
+  end if;
+end $$;
 
 create or replace function public.update_profile_details(p_city text default '', p_country_code text default '')
 returns jsonb language plpgsql security definer set search_path = '' as $$
