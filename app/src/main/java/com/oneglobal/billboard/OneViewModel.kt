@@ -115,6 +115,9 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                     is OneEvent.CreditsGranted -> _ui.update {
                         it.copy(toast = "+${event.amount} CREDITS // ${event.source}")
                     }
+                    is OneEvent.AdSkipGranted -> _ui.update {
+                        it.copy(toast = "COOLDOWN SKIP READY // ${event.remainingToday} AD SKIPS LEFT TODAY")
+                    }
                     OneEvent.FeedbackSubmitted -> _ui.update {
                         it.copy(
                             overlay = Overlay.NONE,
@@ -354,8 +357,8 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         _ui.update { it.copy(overlay = Overlay.VAULT) }
     }
 
-    fun watchRewardedAd() {
-        showToast("Rewarded ads are awaiting setup. No ad has played and no reward was granted.")
+    fun redeemAdReward() {
+        viewModelScope.launch { repository.grantAdReward() }
     }
 
     fun grantPurchasedCredits(amount: Int) {

@@ -177,7 +177,8 @@ class DemoOneRepository : OneRepository {
             return@withLock ChallengeResult.Failure("Your daily reign cap has been reached.")
         }
 
-        val cost = if (before.cooldownRemainingSeconds > 0) 1 else 0
+        val usesAdSkip = before.cooldownRemainingSeconds > 0 && before.adSkipAvailable
+        val cost = if (before.cooldownRemainingSeconds > 0 && !usesAdSkip) 1 else 0
         if (before.credits < cost) {
             return@withLock ChallengeResult.Failure("You need ${cost - before.credits} more ONE credits.")
         }
@@ -186,7 +187,7 @@ class DemoOneRepository : OneRepository {
         delay(620)
         onPhase(ChallengePhase.VERIFYING, "VERIFYING MESSAGE APPROVAL")
         delay(540)
-        onPhase(ChallengePhase.SPENDING, if (cost == 0) "FREE TAKEOVER" else "SPENDING 1 ONE CREDIT")
+        onPhase(ChallengePhase.SPENDING, if (usesAdSkip) "USING AD SKIP" else if (cost == 0) "FREE TAKEOVER" else "SPENDING 1 ONE CREDIT")
         delay(700)
         onPhase(ChallengePhase.COMMITTING, "COMMITTING GLOBAL OWNERSHIP")
         delay(620)
@@ -227,6 +228,7 @@ class DemoOneRepository : OneRepository {
                 webViews = 0,
                 liveWatchers = current.liveWatchers + 240,
                 credits = current.credits - cost,
+                adSkipAvailable = if (usesAdSkip) false else current.adSkipAvailable,
                 userRetakesToday = current.userRetakesToday + 1,
                 cooldownRemainingSeconds = 30,
                 takeoversToday = current.takeoversToday + 1,
@@ -316,8 +318,9 @@ class DemoOneRepository : OneRepository {
 
     override suspend fun grantAdReward() {
         delay(2_400)
-        _world.update { it.copy(credits = it.credits + 1) }
-        _events.emit(OneEvent.CreditsGranted(1, "VERIFIED AD REWARD"))
+        val remaining = (_world.value.adSkipsRemainingToday - 1).coerceAtLeast(0)
+        _world.update { it.copy(adSkipAvailable = true, adSkipsRemainingToday = remaining) }
+        _events.emit(OneEvent.AdSkipGranted(remaining))
     }
 
     override fun grantPurchasedCredits(amount: Int) {

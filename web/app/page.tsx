@@ -131,6 +131,69 @@ export default function Home() {
   const [testerStatus, setTesterStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [inviteEmailed, setInviteEmailed] = useState(false);
   const [shareNotice, setShareNotice] = useState('');
+  const [webSignedIn, setWebSignedIn] = useState(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutNotice, setCheckoutNotice] = useState('');
+
+  useEffect(() => {
+    // Supabase OAuth (implicit flow) returns here with tokens in the URL fragment.
+    const hash = window.location.hash;
+    if (hash.includes('access_token=')) {
+      const params = new URLSearchParams(hash.slice(1));
+      const access_token = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+      if (access_token && refresh_token) {
+        const session: BrowserSession = {
+          access_token,
+          refresh_token,
+          expires_at: Date.now() + Number(params.get('expires_in') ?? '3600') * 1000,
+        };
+        localStorage.setItem('one_web_session', JSON.stringify(session));
+      }
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    void (async () => {
+      if (!SUPABASE_URL || !SUPABASE_KEY) return;
+      const raw = localStorage.getItem('one_web_session');
+      if (!raw) return;
+      try {
+        const session = JSON.parse(raw) as BrowserSession;
+        const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+          headers: { apikey: SUPABASE_KEY, authorization: `Bearer ${session.access_token}` },
+        });
+        if (!response.ok) return;
+        const user = await response.json() as { is_anonymous?: boolean };
+        setWebSignedIn(user.is_anonymous === false);
+      } catch { /* stay signed out */ }
+    })();
+  }, []);
+
+  const buyCredits = useCallback(async () => {
+    if (!webSignedIn) {
+      if (!SUPABASE_URL) return;
+      const redirect = window.location.origin + window.location.pathname;
+      window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirect)}`;
+      return;
+    }
+    setCheckoutBusy(true);
+    setCheckoutNotice('');
+    try {
+      const raw = localStorage.getItem('one_web_session');
+      const session = raw ? JSON.parse(raw) as BrowserSession : null;
+      if (!session?.access_token) throw new Error('no_session');
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${session.access_token}` },
+      });
+      const payload = await response.json() as { url?: string; error?: string };
+      if (payload.url) window.location.href = payload.url;
+      else setCheckoutNotice(payload.error || 'Web checkout is not available yet.');
+    } catch {
+      setCheckoutNotice('Web checkout is not available yet.');
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }, [webSignedIn]);
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => entries.forEach((entry) => {
@@ -213,7 +276,7 @@ export default function Home() {
   };
 
   return (
-    <main className="one-shell" style={{ '--accent': accent, '--acid': accent, '--live-accent': accent } as React.CSSProperties}>
+    <main className="one-shell" style={{ '--accent': accent, '--acid': accent } as React.CSSProperties}>
       <a href="#live" className="skip-link">Skip to the live screen</a>
       <div className="grid-glow" aria-hidden="true" />
       <header className="topbar">
@@ -232,7 +295,11 @@ export default function Home() {
           <div className="hero-actions">
             <a className="primary-cta" href="#join">JOIN THE CLOSED TEST <ArrowRight /></a>
             <a className="ghost-cta" href="#live">WATCH IT LIVE <ArrowDown /></a>
+            <button type="button" className="ghost-cta" onClick={() => void buyCredits()} disabled={checkoutBusy}>
+              {checkoutBusy ? 'OPENING CHECKOUT…' : webSignedIn ? 'BUY ONE CREDITS' : 'SIGN IN TO BUY CREDITS'} <ArrowRight />
+            </button>
           </div>
+          {checkoutNotice && <p className="checkout-notice">{checkoutNotice}</p>}
           <div className="hero-proof"><b>BUILT FOR ANDROID</b><span /><b>REAL PEOPLE</b><span /><b>ONE GLOBAL STAGE</b></div>
         </div>
         <div className="phone-theatre" aria-label="Live ONE screen preview">

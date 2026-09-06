@@ -154,8 +154,14 @@ class CloudOneRepository(context: Context) : OneRepository {
     }
 
     override suspend fun grantAdReward() {
-        _events.emit(OneEvent.Error("Ad rewards are granted only after RevenueCat server verification."))
-        refreshWorld()
+        runCatching {
+            val requestId = UUID.randomUUID().toString()
+            val result = rpc("grant_ad_skip", JSONObject().put("p_request_id", requestId), authenticated = true)
+            refreshWorld()
+            if (result.optBoolean("ad_skip_available")) {
+                _events.emit(OneEvent.AdSkipGranted(result.optInt("ad_skips_remaining_today", 0)))
+            }
+        }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
     }
 
     override fun grantPurchasedCredits(amount: Int) {
@@ -525,6 +531,8 @@ class CloudOneRepository(context: Context) : OneRepository {
             blockedCount = json.optInt("blocked_count"),
             reactionCounts = json.optJSONObject("reaction_counts")?.let { counts -> counts.keys().asSequence().associateWith { counts.optInt(it) } },
             myReactions = json.optJSONArray("my_reactions")?.let { list -> (0 until list.length()).map { list.getString(it) }.toSet() } ?: emptySet(),
+            adSkipAvailable = json.optBoolean("ad_skip_available"),
+            adSkipsRemainingToday = json.optInt("ad_skips_remaining_today", 3),
             userTakeovers = json.optJSONObject("user_stats")?.optInt("takeovers"),
             userLongestReign = json.optJSONObject("user_stats")?.optInt("longest_reign_seconds"),
             userVerifiedViews = json.optJSONObject("user_stats")?.optInt("verified_views"),

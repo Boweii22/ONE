@@ -14,16 +14,16 @@ Implemented in Android:
 - Migrations `202609050001` through `202609050003` have been applied by the project owner.
 
 ## Must verify before release
-0. Apply `202609060001_unique_reactions.sql` once, in full. It is transactional and rerunnable. It keeps historical rows, counts unique voters and prevents repeated emoji reactions in the same reign. This new migration has NOT been applied remotely by Codex.
+0. Apply `202609060001_unique_reactions.sql` and `202609060002_ad_skip_rewards.sql` once, in full, in that order. Both are transactional and rerunnable. The first keeps historical rows, counts unique voters and prevents repeated emoji reactions in the same reign; the second adds the ad-skip columns/RPC described below. Neither has been applied remotely by Codex.
 1. Verify identity ID, handle, reigns, Hall, and balance before/after Google linking, Play update, process death, Google cancellation, refresh failure and cross-device restore. Do not uninstall an unlinked identity to test upgrades.
 2. Android challenge URL handling exists, but automatic App Link opening needs the website's `/.well-known/assetlinks.json` using the Play signing SHA-256. Without domain verification Android may keep opening the website.
 
 ## Remaining integrations — do not advertise as shipped
-- See `MONETIZATION-SETUP.md` for the prepared AdMob adapter and disabled authenticated checkout endpoint. The owner confirmed on September 6 that AdMob IDs and the RevenueCat Funnel have not yet been created. Activation and end-to-end monetization remain pending.
+- See `MONETIZATION-SETUP.md`. The owner confirmed on September 6 that AdMob IDs and the RevenueCat Funnel have not yet been created. Both the rewarded-ad UI (challenge sheet "WATCH AN AD" choice) and the website's Google sign-in + "BUY ONE CREDITS" checkout button now exist in code, gated inert behind those missing dashboard IDs. Activation and end-to-end monetization remain pending.
 - AdMob app ID, rewarded unit ID, consent setup, RevenueCat AdMob adapter and SSV rule. Configure https://api.revenuecat.com/v1/incoming-webhooks/admob-ssv-rewarded.
-- Use a separate verified ad-skip reward, not client-side ONE Credits. The production economy is fixed in `ECONOMY.md`: takeovers are free when ready and one credit skips one active cooldown. A verified RevenueCat reward still needs an idempotent server redemption; a local earned callback is NOT sufficient.
-- Daily ad cap is configurable (default 3) but not enforced by an ad flow yet because that flow is not integrated.
-- RevenueCat Funnel URL, Stripe/RevenueCat product mapping and authenticated app-user identity handoff. Web purchases must be reconciled server-side exactly once. Do not add a mobile external-purchase CTA without checking Play policy/region eligibility.
+- Ad skips use a separate `ad_skip_available` flag on the profile (migration `202609060002_ad_skip_rewards.sql`), never client-side ONE Credits, per `ECONOMY.md`. `grant_ad_skip` is idempotent and capped at 3/UTC day; `take_one` consumes the flag only on a successful takeover. This migration has NOT been applied remotely yet — run `supabase db push`.
+- The RevenueCat AdMob adapter's own client-observed reward verification (`rewardVerificationCompleted`) is what triggers `grant_ad_skip` today. There is still no independent server-side AdMob SSV check on our backend.
+- RevenueCat Funnel URL, Stripe/RevenueCat product mapping and Google provider enablement in Supabase Auth. Web purchases must be reconciled server-side exactly once. Do not add a mobile external-purchase CTA without checking Play policy/region eligibility.
 - Update privacy policy and Play Data Safety for optional Google authentication, public photos, country and advertising before rollout.
 
 ## Gameplay migration

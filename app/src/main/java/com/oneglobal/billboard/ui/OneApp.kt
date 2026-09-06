@@ -149,6 +149,7 @@ fun OneApp(
     onShareReceipt: (ReignReceipt) -> Unit,
     onShareONE: () -> Unit,
     onGoogle: (Boolean) -> Unit,
+    onWatchAd: () -> Unit,
     onIdentifyUser: (String) -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenDeletionHelp: () -> Unit,
@@ -191,7 +192,7 @@ fun OneApp(
         return
     }
 
-    GuidedTourHost { startTour ->
+    GuidedTourHost(currentTab = ui.tab, onSelectTab = viewModel::selectTab) { startTour ->
     Box(Modifier.fillMaxSize().background(Ink)) {
         AnimatedContent(
             targetState = ui.tab,
@@ -294,6 +295,7 @@ fun OneApp(
                     onBegin = viewModel::beginChallenge,
                     onOpenVault = viewModel::openVault,
                     onInfo = viewModel::openHowItWorks,
+                    onWatchAd = onWatchAd,
                 )
                 Overlay.RECEIPT -> ReceiptOverlay(
                     receipt = ui.receipt,
@@ -631,7 +633,8 @@ private fun CrowdControls(
     onReact: (String) -> Unit,
     onEcho: () -> Unit,
 ) {
-    Column {
+    val targets = LocalTourTargets.current
+    Column(Modifier.onGloballyPositioned { targets["REACT"] = it.boundsInRoot() }) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("LIVE REACTIONS", color = Muted, fontFamily = mono, fontSize = 12.sp, letterSpacing = .8.sp)
             Text(world.reactionCounts?.values?.sum()?.let { "${formatNumber(it)} TOTAL" } ?: "SYNCING", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -677,7 +680,8 @@ private fun AuctionCard(
     val cooldown = world.cooldownRemainingSeconds
     val canRevenge = cooldown > 0 && world.credits > 0
     val canTake = protectedSeconds == 0 && (cooldown == 0 || canRevenge)
-    Column(Modifier.fillMaxWidth()) {
+    val targets = LocalTourTargets.current
+    Column(Modifier.fillMaxWidth().onGloballyPositioned { targets["TAKE"] = it.boundsInRoot() }) {
         Button(
             onClick = onPrimary,
             enabled = isOwner || canTake,
@@ -1035,10 +1039,12 @@ private fun ChallengeOverlay(
     onBegin: () -> Unit,
     onOpenVault: () -> Unit,
     onInfo: () -> Unit,
+    onWatchAd: () -> Unit,
 ) {
     val accent = Acid
     val needsTicket = world.cooldownRemainingSeconds > 0
-    val canAttempt = !needsTicket || world.credits > 0
+    val adSkipReady = BuildConfig.ADMOB_REWARDED_UNIT_ID.isNotBlank()
+    val canAttempt = !needsTicket || world.credits > 0 || world.adSkipAvailable
     val selected = world.messages.firstOrNull { it.id == ui.selectedMessageId }
     val busy = ui.challengePhase !in listOf(ChallengePhase.IDLE, ChallengePhase.FAILED)
 
@@ -1079,7 +1085,19 @@ private fun ChallengeOverlay(
 
                 ChallengeChoice("ϟ", "FREE STEAL", "Fastest path. Ready after cooldown.", if (needsTicket) "${world.cooldownRemainingSeconds}s" else "READY", Acid, selected = !needsTicket)
                 Spacer(Modifier.height(10.dp))
-                ChallengeChoice("ϟ", "ONE CREDIT", "Skip the cooldown. Spent only if you win.", "${world.credits} LEFT", Ice, selected = needsTicket && world.credits > 0, onClick = if (world.credits == 0) onOpenVault else null)
+                ChallengeChoice("ϟ", "ONE CREDIT", "Skip the cooldown. Spent only if you win.", "${world.credits} LEFT", Ice, selected = needsTicket && !world.adSkipAvailable && world.credits > 0, onClick = if (world.credits == 0) onOpenVault else null)
+                if (needsTicket && adSkipReady) {
+                    Spacer(Modifier.height(10.dp))
+                    ChallengeChoice(
+                        "▶",
+                        "WATCH AN AD",
+                        if (world.adSkipAvailable) "Ready. Spent only if you win." else "Skip the cooldown for free. ${world.adSkipsRemainingToday} left today.",
+                        if (world.adSkipAvailable) "READY" else if (world.adSkipsRemainingToday > 0) "WATCH" else "DAILY LIMIT",
+                        Orange,
+                        selected = world.adSkipAvailable,
+                        onClick = if (!world.adSkipAvailable && world.adSkipsRemainingToday > 0) onWatchAd else null,
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
                 ChallengeChoice("LIVE", "LIVE CHALLENGE", "Hold to submit an atomic server-verified takeover.", "ATOMIC", Orange, selected = false)
                 Spacer(Modifier.height(16.dp))
@@ -1105,7 +1123,11 @@ private fun ChallengeOverlay(
                                 PrimaryButton("GET ONE CREDITS", Ice, onOpenVault)
                             } else {
                                 HoldToOwnButton(
-                                    text = if (needsTicket) "HOLD TO CONTINUE — 1 CREDIT" else "HOLD TO CONTINUE — FREE",
+                                    text = when {
+                                        !needsTicket -> "HOLD TO CONTINUE — FREE"
+                                        world.adSkipAvailable -> "HOLD TO CONTINUE — AD SKIP"
+                                        else -> "HOLD TO CONTINUE — 1 CREDIT"
+                                    },
                                     enabled = selected != null,
                                     onComplete = onBegin,
                                 )
@@ -1438,7 +1460,7 @@ private fun ReceiptOverlay(
     val duration = if (stillOwner) ((System.currentTimeMillis() - resolved.startedAtMillis) / 1_000L).toInt() else resolved.durationSeconds
 
     Box(Modifier.fillMaxSize().background(Ink)) {
-        VictoryConfetti(Modifier.fillMaxSize())
+        VictoryConfetti(resolved, Modifier.fillMaxSize())
         Column(
             Modifier
                 .fillMaxSize()
@@ -1453,7 +1475,7 @@ private fun ReceiptOverlay(
                 CircleAction("×", onClose)
             }
             Spacer(Modifier.height(20.dp))
-            VictorySeal()
+            VictorySeal(resolved.startedAtMillis)
             Spacer(Modifier.height(18.dp))
             Text(if (stillOwner) "YOU OWN ONE." else "YOUR REIGN\nIS HISTORY.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 46.sp, lineHeight = 43.sp, letterSpacing = (-2.sp))
             Text(if (stillOwner) "You took the screen. It’s yours." else "The screen moved on. Your proof remains.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
@@ -1479,8 +1501,17 @@ private fun ReceiptOverlay(
 }
 
 @Composable
-private fun VictorySeal() {
-    Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
+private fun VictorySeal(key: Any) {
+    val pop = remember(key) { Animatable(0f) }
+    LaunchedEffect(key) { pop.animateTo(1f, spring(dampingRatio = .45f, stiffness = 260f)) }
+    Box(
+        Modifier.fillMaxWidth().height(180.dp).graphicsLayer {
+            scaleX = .5f + pop.value * .5f
+            scaleY = .5f + pop.value * .5f
+            alpha = pop.value.coerceIn(0f, 1f)
+        },
+        contentAlignment = Alignment.Center,
+    ) {
         Box(Modifier.size(164.dp).border(2.dp, Acid, CircleShape), contentAlignment = Alignment.Center) {
             Box(Modifier.size(116.dp).border(1.dp, Acid.copy(alpha = .7f), CircleShape), contentAlignment = Alignment.Center) {
                 Text("1", color = Acid, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 78.sp, letterSpacing = (-5).sp)
@@ -1491,22 +1522,64 @@ private fun VictorySeal() {
     }
 }
 
+private enum class ConfettiShape { RECT, CIRCLE, TRIANGLE }
+
 @Composable
-private fun VictoryConfetti(modifier: Modifier = Modifier) {
-    val progress = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { progress.animateTo(1f, tween(3600, easing = LinearEasing)) }
+private fun VictoryConfetti(key: Any, modifier: Modifier = Modifier) {
+    val progress = remember(key) { Animatable(0f) }
+    LaunchedEffect(key) {
+        progress.snapTo(0f)
+        progress.animateTo(1f, tween(4200, easing = LinearEasing))
+    }
+    val pieceCount = 160
     Canvas(modifier) {
-        val colors = listOf(Acid, Orange, Ice, Paper, Magenta)
-        repeat(90) { index ->
-            val t = ((progress.value - (index % 7) * .018f) / .88f).coerceIn(0f, 1f)
+        val colors = listOf(Acid, Orange, Ice, Paper, Magenta, Cobalt)
+        repeat(pieceCount) { index ->
+            val t = ((progress.value - (index % 11) * .014f) / .82f).coerceIn(0f, 1f)
             if (t > 0f && t < 1f) {
                 val seed = ((index * 97) % 389) / 389f
-                val x = size.width * (.5f + (seed - .5f) * t * 2.8f) + kotlin.math.sin(t * 14f + index) * 18.dp.toPx()
-                val y = size.height * (.26f - t * (.55f + (index % 5) * .07f) + t * t * 1.9f)
-                val alpha = ((1f - t) * 3f).coerceIn(0f, 1f)
-                withTransform({ rotate(index * 31f + t * 720f, Offset(x, y)) }) {
-                    drawRect(colors[index % colors.size].copy(alpha = alpha), topLeft = Offset(x, y), size = androidx.compose.ui.geometry.Size((3 + index % 4).dp.toPx(), (7 + index % 6).dp.toPx()))
+                val burstSeed = ((index * 53) % 211) / 211f
+                val x = size.width * (.5f + (seed - .5f) * (.35f + t * 2.6f)) +
+                    kotlin.math.sin(t * 15f + index) * (10 + index % 26).dp.toPx()
+                val y = size.height * (.22f - t * (.62f + (index % 6) * .08f) + t * t * 2.05f)
+                val fadeIn = (t * 9f).coerceIn(0f, 1f)
+                val fadeOut = ((1f - t) * 3.4f).coerceIn(0f, 1f)
+                val alpha = minOf(fadeIn, fadeOut)
+                val color = colors[index % colors.size].copy(alpha = alpha)
+                val spin = index * 27f + t * (520f + burstSeed * 640f)
+                withTransform({ rotate(spin, Offset(x, y)) }) {
+                    when (ConfettiShape.entries[index % 3]) {
+                        ConfettiShape.RECT -> drawRect(
+                            color,
+                            topLeft = Offset(x, y),
+                            size = androidx.compose.ui.geometry.Size((3 + index % 4).dp.toPx(), (8 + index % 7).dp.toPx()),
+                        )
+                        ConfettiShape.CIRCLE -> drawCircle(color, radius = (3 + index % 3).dp.toPx(), center = Offset(x, y))
+                        ConfettiShape.TRIANGLE -> {
+                            val s = (7 + index % 5).dp.toPx()
+                            drawPath(
+                                Path().apply {
+                                    moveTo(x, y - s / 2)
+                                    lineTo(x + s / 2, y + s / 2)
+                                    lineTo(x - s / 2, y + s / 2)
+                                    close()
+                                },
+                                color,
+                            )
+                        }
+                    }
                 }
+            }
+        }
+        repeat(28) { index ->
+            val t = ((progress.value - index * .01f) / .3f).coerceIn(0f, 1f)
+            if (t > 0f && t < 1f) {
+                val angle = (index / 28f) * 360f
+                val radius = size.minDimension * .1f + t * size.minDimension * .55f
+                val cx = size.width / 2f + kotlin.math.cos(Math.toRadians(angle.toDouble())).toFloat() * radius
+                val cy = size.height * .3f + kotlin.math.sin(Math.toRadians(angle.toDouble())).toFloat() * radius
+                val alpha = (1f - t).coerceIn(0f, 1f)
+                drawCircle(Acid.copy(alpha = alpha * .9f), radius = (2 + t * 3).dp.toPx(), center = Offset(cx, cy))
             }
         }
     }
@@ -2059,7 +2132,8 @@ private fun YourRankDivider() {
 
 @Composable
 private fun WalletHero(credits: Int, onClick: () -> Unit) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(Brush.linearGradient(listOf(Color(0xFF27272E), Color(0xFF111115)))).border(1.dp, Acid.copy(alpha = .42f), RoundedCornerShape(7.dp)).clickable(onClick = onClick).padding(19.dp)) {
+    val targets = LocalTourTargets.current
+    Box(Modifier.fillMaxWidth().onGloballyPositioned { targets["WALLET"] = it.boundsInRoot() }.clip(RoundedCornerShape(7.dp)).background(Brush.linearGradient(listOf(Color(0xFF27272E), Color(0xFF111115)))).border(1.dp, Acid.copy(alpha = .42f), RoundedCornerShape(7.dp)).clickable(onClick = onClick).padding(19.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("ONE VAULT", color = Muted, fontFamily = mono, fontSize = 12.sp, letterSpacing = 1.1.sp)

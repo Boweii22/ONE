@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
     private val viewModel: OneViewModel by viewModels()
     private var identifiedUserId: String? = null
     private var pushSubscriptionObserver: IPushSubscriptionObserver? = null
+    private val rewardedAds = RewardedAds()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity() {
                     onShareReceipt = ::shareReceipt,
                     onShareONE = ::shareONE,
                     onGoogle = ::googleIdentity,
+                    onWatchAd = ::watchAd,
                     onIdentifyUser = ::identifyUser,
                     onOpenPrivacy = { openUrl("${BuildConfig.ONE_WEB_URL}/privacy") },
                     onOpenDeletionHelp = { openUrl("${BuildConfig.ONE_WEB_URL}/delete-account") },
@@ -233,6 +235,14 @@ class MainActivity : ComponentActivity() {
             append("One message. One owner. Take it back: ${BuildConfig.ONE_WEB_URL} #OWNONE #Shipaton")
         }
         share(text, "Share your reign")
+    }
+
+    private fun watchAd() {
+        rewardedAds.show(
+            activity = this,
+            status = { message -> viewModel.showToast(message) },
+            verified = { viewModel.redeemAdReward() },
+        )
     }
 
     private fun googleIdentity(restore: Boolean) {
