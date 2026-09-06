@@ -30,8 +30,10 @@ android {
         applicationId = "com.tomribowei.one"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "1.0.11"
+        versionCode = 22
+        versionName = "1.0.12"
+        buildConfigField("String", "ADMOB_REWARDED_UNIT_ID", "\"" + onePublicValue("ADMOB_REWARDED_UNIT_ID") + "\"")
+        manifestPlaceholders["admobAppId"] = onePublicValue("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -111,6 +113,9 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling:1.7.6")
 
     implementation("com.revenuecat.purchases:purchases:10.15.1")
+    implementation("com.revenuecat.purchases:purchases-admob:10.15.1")
+    implementation("com.google.android.gms:play-services-ads:24.0.0")
+    implementation("com.google.android.ump:user-messaging-platform:3.2.0")
     implementation("com.onesignal:OneSignal:5.9.8")
 
     testImplementation("junit:junit:4.13.2")

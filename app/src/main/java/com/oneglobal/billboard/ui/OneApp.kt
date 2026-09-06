@@ -86,6 +86,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -161,7 +164,7 @@ fun OneApp(
     }
 
     if (showSplash) {
-        SplashScreen()
+        LaunchScreen()
         return
     }
 
@@ -188,6 +191,7 @@ fun OneApp(
         return
     }
 
+    GuidedTourHost { startTour ->
     Box(Modifier.fillMaxSize().background(Ink)) {
         AnimatedContent(
             targetState = ui.tab,
@@ -236,7 +240,7 @@ fun OneApp(
                     onFeedback = viewModel::openFeedback,
                     onUnblockAll = viewModel::unblockAll,
                     onDeleteAccount = viewModel::openDeleteAccount,
-                    onHowItWorks = viewModel::openHowItWorks,
+                    onHowItWorks = startTour,
                     onEditProfile = viewModel::openProfile,
                 )
             }
@@ -360,6 +364,7 @@ fun OneApp(
                 Overlay.HOW_IT_WORKS -> HowItWorksOverlay(onClose = viewModel::closeOverlay)
             }
         }
+    }
     }
 }
 
@@ -633,25 +638,23 @@ private fun CrowdControls(
         }
         Spacer(Modifier.height(9.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            ReactionOrb("🔥", "FIRE", world.reactionCounts?.get("FIRE")) { onReact("FIRE") }
-            ReactionOrb("👏", "RESPECT", world.reactionCounts?.get("RESPECT")) { onReact("RESPECT") }
-            ReactionOrb("💯", "100", world.reactionCounts?.get("100")) { onReact("100") }
-            ReactionOrb("👀", "WATCH", world.reactionCounts?.get("WATCH")) { onReact("WATCH") }
-            ReactionOrb("🚀", "Rocket", world.reactionCounts?.get("ROCKET")) { onReact("ROCKET") }
+            listOf("🔥" to "FIRE", "👏" to "RESPECT", "💯" to "100", "👀" to "WATCH", "🚀" to "ROCKET").forEach { (icon, key) ->
+                ReactionOrb(icon, key, world.reactionCounts?.get(key), key in world.myReactions) { onReact(key) }
+            }
         }
     }
 }
 
 @Composable
-private fun ReactionOrb(icon: String, label: String, count: Int?, onClick: () -> Unit) {
+private fun ReactionOrb(icon: String, label: String, count: Int?, selected: Boolean = false, onClick: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
                 .size(56.dp)
                 .clip(CircleShape)
                 .background(InkRaised)
-                .border(1.dp, Color.White.copy(alpha = .1f), CircleShape)
-                .clickable(onClick = onClick),
+                .border(1.dp, if (selected) Acid else Color.White.copy(alpha = .1f), CircleShape)
+                .clickable(enabled = !selected, onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1223,7 +1226,8 @@ private fun IdentityOverlay(
         Spacer(Modifier.height(30.dp))
         Text("KEEP $handle", color = Paper, fontFamily = display, fontSize = 40.sp)
         Text("If you haven't linked Google, this identity relies on this installation. Link it to return on another device without losing your reigns.", color = Muted, fontSize = 16.sp, modifier = Modifier.padding(vertical = 20.dp))
-        Button(onClick = { onGoogle(false) }, enabled = !ui.identityBusy && BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Continue with Google") }
+        if (ui.identityLinked) Text("✓ Google connected. Your handle is protected. Use this Google account to return on another device.", color = Acid, fontSize = 17.sp, modifier = Modifier.padding(bottom = 16.dp))
+        Button(onClick = { onGoogle(false) }, enabled = !ui.identityBusy && !ui.identityLinked && BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (ui.identityLinked) "Google connected ✓" else if (ui.identityBusy) "Saving your identity…" else "Continue with Google") }
         if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank()) Text("Google connection is awaiting setup. You can keep playing.", color = Muted)
         TextButton(onClick = onClose) { Text("Not now") }
         ui.identityError?.let { ErrorStrip(it) }
@@ -1489,12 +1493,21 @@ private fun VictorySeal() {
 
 @Composable
 private fun VictoryConfetti(modifier: Modifier = Modifier) {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { progress.animateTo(1f, tween(3600, easing = LinearEasing)) }
     Canvas(modifier) {
-        val colors = listOf(Acid, Orange, Ice)
-        repeat(24) { index ->
-            val x = ((index * 97) % 389) / 389f * size.width
-            val y = ((index * 53) % 173) / 173f * size.height * .32f
-            drawRect(colors[index % colors.size].copy(alpha = .8f), topLeft = Offset(x, y), size = androidx.compose.ui.geometry.Size(4.dp.toPx(), 10.dp.toPx()))
+        val colors = listOf(Acid, Orange, Ice, Paper, Magenta)
+        repeat(90) { index ->
+            val t = ((progress.value - (index % 7) * .018f) / .88f).coerceIn(0f, 1f)
+            if (t > 0f && t < 1f) {
+                val seed = ((index * 97) % 389) / 389f
+                val x = size.width * (.5f + (seed - .5f) * t * 2.8f) + kotlin.math.sin(t * 14f + index) * 18.dp.toPx()
+                val y = size.height * (.26f - t * (.55f + (index % 5) * .07f) + t * t * 1.9f)
+                val alpha = ((1f - t) * 3f).coerceIn(0f, 1f)
+                withTransform({ rotate(index * 31f + t * 720f, Offset(x, y)) }) {
+                    drawRect(colors[index % colors.size].copy(alpha = alpha), topLeft = Offset(x, y), size = androidx.compose.ui.geometry.Size((3 + index % 4).dp.toPx(), (7 + index % 6).dp.toPx()))
+                }
+            }
         }
     }
 }
@@ -1800,9 +1813,11 @@ private fun BottomNav(selected: MainTab, onSelected: (MainTab) -> Unit, modifier
 @Composable
 private fun RowScope.NavItem(icon: String, label: String, tab: MainTab, selected: MainTab, onSelected: (MainTab) -> Unit) {
     val active = tab == selected
+    val targets = LocalTourTargets.current
     Column(
         Modifier
             .weight(1f)
+            .onGloballyPositioned { targets[tab.name] = it.boundsInRoot() }
             .fillMaxHeight()
             .clickable { onSelected(tab) }
             .background(Color.Transparent)

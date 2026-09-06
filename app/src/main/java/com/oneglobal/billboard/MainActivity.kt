@@ -240,6 +240,7 @@ class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             val nonce = java.util.UUID.randomUUID().toString()
+            viewModel.beginGoogleIdentity()
             val digest = java.security.MessageDigest.getInstance("SHA-256")
                 .digest(nonce.toByteArray()).joinToString("") { "%02x".format(it) }
             try {
@@ -252,9 +253,9 @@ class MainActivity : ComponentActivity() {
                     .createFrom(result.credential.data).idToken
                 viewModel.googleIdentity(token, nonce, restore)
             } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
-                // Not now always means keep playing with the existing identity.
+                viewModel.identityStatus("Google sign-in cancelled. You can try again whenever you're ready.")
             } catch (e: Exception) {
-                viewModel.showToast("Google sign-in could not complete. Your current identity is unchanged.")
+                viewModel.identityStatus("Google could not finish sign-in (${e.javaClass.simpleName}). Please try again. Your handle is safe.")
             }
         }
     }

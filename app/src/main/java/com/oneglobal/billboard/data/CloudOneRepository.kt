@@ -345,8 +345,14 @@ class CloudOneRepository(context: Context) : OneRepository {
             connection.outputStream.use { it.write(body.toString().toByteArray()) }
             val payload = connection.readJson()
             if (connection.responseCode !in 200..299) {
-                throw IllegalStateException(if (restore) "Google restore failed. Your current session has not been changed."
-                    else "Could not link Google. It may already belong to another ONE account. Your current identity is unchanged.")
+                val code = payload.optString("error_code", payload.optString("error", "unknown"))
+                val detail = when (code) {
+                    "manual_linking_disabled" -> "Account linking is disabled on the server. Please contact ONE support."
+                    "identity_already_exists" -> "This Google account already protects another ONE identity. Use Restore to open that account."
+                    "bad_jwt", "bad_oauth_state", "validation_failed" -> "Google could not be verified. Please retry; if it continues, contact ONE support."
+                    else -> "Google connection failed (HTTP ${connection.responseCode}, $code). Please retry."
+                }
+                throw IllegalStateException("$detail Your current handle is unchanged.")
             }
             val returnedId = payload.getJSONObject("user").getString("id")
             check(restore || returnedId == _world.value.currentUserId) { "Identity mismatch. Existing session retained." }
@@ -518,6 +524,7 @@ class CloudOneRepository(context: Context) : OneRepository {
             currentContentBlocked = json.optBoolean("current_content_blocked"),
             blockedCount = json.optInt("blocked_count"),
             reactionCounts = json.optJSONObject("reaction_counts")?.let { counts -> counts.keys().asSequence().associateWith { counts.optInt(it) } },
+            myReactions = json.optJSONArray("my_reactions")?.let { list -> (0 until list.length()).map { list.getString(it) }.toSet() } ?: emptySet(),
             userTakeovers = json.optJSONObject("user_stats")?.optInt("takeovers"),
             userLongestReign = json.optJSONObject("user_stats")?.optInt("longest_reign_seconds"),
             userVerifiedViews = json.optJSONObject("user_stats")?.optInt("verified_views"),

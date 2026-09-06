@@ -146,6 +146,7 @@ data class WorldState(
     val hallAllTime: List<HallEntry> = emptyList(),
     val hallAllTimeLive: Boolean = false,
     val reactionCounts: Map<String, Int>? = null,
+    val myReactions: Set<String> = emptySet(),
     val userTakeovers: Int? = null,
     val userLongestReign: Int? = null,
     val userVerifiedViews: Int? = null,
@@ -180,6 +181,7 @@ data class OneUiState(
     val recoveryHandle: String = "",
     val recoveryCodeInput: String = "",
     val identityBusy: Boolean = false,
+    val identityLinked: Boolean = false,
     val identityError: String? = null,
     val profileBusy: Boolean = false,
 )

@@ -38,10 +38,12 @@ type OneState = {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const PLAY_URL = 'https://play.google.com/store/apps/details?id=com.tomribowei.one';
 
 const accentByPalette: Record<string, string> = {
-  ACID: '#c8ff33', COBALT: '#5865ff', ORANGE: '#ff7043', MAGENTA: '#ff4ca4', ICE: '#67dfff',
+  ACID: '#d7ff00', COBALT: '#315cff', ORANGE: '#ff4e2b', MAGENTA: '#ff3bbe', ICE: '#72e7ff',
 };
+const reactionIcon: Record<string, string> = { FIRE: '🔥', THIEF: '🔥', RESPECT: '👏', '100': '💯', LOL: '💯', WATCH: '👀', 'TOO SLOW': '👀', ROCKET: '🚀', 'TAKE IT BACK': '🚀' };
 
 async function rpc<T>(name: string, body: object, token?: string): Promise<T> {
   if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('backend_not_configured');
@@ -127,6 +129,16 @@ export default function Home() {
   const [now, setNow] = useState(0);
   const [testerForm, setTesterForm] = useState<TesterForm>({ email: '', name: '', device: 'Android phone' });
   const [testerStatus, setTesterStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [inviteEmailed, setInviteEmailed] = useState(false);
+  const [shareNotice, setShareNotice] = useState('');
+
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => entries.forEach((entry) => {
+      if (entry.isIntersecting) { entry.target.classList.add('revealed'); observer.unobserve(entry.target); }
+    }), { threshold: 0.08 });
+    document.querySelectorAll('.mechanics, .manifesto, .tester-section, .screen-reel').forEach((el) => { el.classList.add('reveal-ready'); observer.observe(el); });
+    return () => observer.disconnect();
+  }, []);
 
   const load = useCallback(async (token?: string) => {
     try {
@@ -177,8 +189,10 @@ export default function Home() {
     const text = state
       ? `${state.reign.owner.handle} owns ONE: “${state.reign.message.text}”\nWatch the only live screen.`
       : 'Watch ONE — the only live screen.';
-    if (navigator.share) await navigator.share({ title: 'ONE', text, url: location.href });
-    else await navigator.clipboard.writeText(`${text}\n${location.href}`);
+    try {
+      if (navigator.share) await navigator.share({ title: 'ONE', text, url: location.href });
+      else { await navigator.clipboard.writeText(`${text}\n${location.href}`); setShareNotice('Link copied'); }
+    } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) setShareNotice('Copy the link from your address bar.'); }
   };
 
   const submitTesterInterest = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -191,23 +205,26 @@ export default function Home() {
         body: JSON.stringify({ ...testerForm, company: '' }),
       });
       if (!response.ok) throw new Error('tester_interest_failed');
+      const result = await response.json() as { emailed?: boolean };
+      setInviteEmailed(Boolean(result.emailed));
       setTesterStatus('sent');
       setTesterForm({ email: '', name: '', device: 'Android phone' });
     } catch { setTesterStatus('error'); }
   };
 
   return (
-    <main className="one-shell" style={{ '--accent': accent } as React.CSSProperties}>
+    <main className="one-shell" style={{ '--accent': accent, '--acid': accent, '--live-accent': accent } as React.CSSProperties}>
+      <a href="#live" className="skip-link">Skip to the live screen</a>
       <div className="grid-glow" aria-hidden="true" />
       <header className="topbar">
         <Link href="/" className="brand" aria-label="ONE home"><strong>1</strong><span>ONE</span></Link>
+        <nav className="main-nav" aria-label="Main navigation"><a href="#live">THE SCREEN</a><a href="#how">THE RULES</a><a href="#join">GET ACCESS ↗</a></nav>
         <div className={`live-pill ${status}`}><i /><span>{status === 'live' ? 'LIVE WORLD STATE' : status.replace('_', ' ')}</span></div>
-        <Button variant="outline" className="share-button" onClick={() => void share()}><Share2 /> Share reign</Button>
+        <Button variant="outline" className="share-button" onClick={() => void share()}><Share2 /> {shareNotice || 'Share ONE'}</Button>
       </header>
 
       <section className="launch-hero">
-        <div className="hero-orbit orbit-one" aria-hidden="true" />
-        <div className="hero-orbit orbit-two" aria-hidden="true" />
+        <Image className="hero-world" src="/world-map.png" alt="" fill priority sizes="100vw" />
         <div className="hero-copy">
           <div className="eyebrow"><span>01</span> A SOCIAL GAME PLAYED IN PUBLIC</div>
           <h1>THE INTERNET<br />HAS <em>ONE</em><br />SCREEN.</h1>
@@ -218,16 +235,24 @@ export default function Home() {
           </div>
           <div className="hero-proof"><b>BUILT FOR ANDROID</b><span /><b>REAL PEOPLE</b><span /><b>ONE GLOBAL STAGE</b></div>
         </div>
-        <div className="phone-theatre" aria-label="ONE app previews">
-          <div className="phone-card phone-back"><Image src="/screens/one-stolen.png" alt="ONE stolen screen" fill priority sizes="(max-width: 900px) 42vw, 260px" /></div>
-          <div className="phone-card phone-front"><Image src="/screens/one-live.png" alt="ONE live global screen" fill priority sizes="(max-width: 900px) 52vw, 320px" /></div>
-          <div className="signal-badge"><Radio /><span>THE WORLD<br />IS WATCHING</span></div>
+        <div className="phone-theatre" aria-label="Live ONE screen preview">
+          <div className="hero-ticket"><span>ADMIT ONE / ANDROID</span><strong>YOUR NEXT<br />MAIN CHARACTER<br />MOMENT.</strong><a href="#join">TAKE YOUR PLACE <ArrowRight /></a></div>
+          <div className="broadcast-phone">
+            <div className="phone-status"><span className="status-dot" />{status === 'live' ? 'LIVE WORLD STATE' : 'ONE / GLOBAL SCREEN'}<Radio size={18} /></div>
+            <div className="phone-owner"><span>{state?.reign.owner.initials || '1'}</span><div><b>{state?.reign.owner.handle || 'ONE GLOBAL STAGE'}</b><small>{state ? `${state.reign.owner.city}, ${state.reign.owner.country_code}` : 'EVERYONE IS INVITED'}</small></div></div>
+            <div className="phone-message"><Image src="/world-map.png" fill alt="" sizes="360px" /><strong>{state?.reign.message.text || 'THE WORLD IS WATCHING.'}</strong></div>
+            <div className="phone-metrics"><div><small><Eye size={14} /> WATCHING NOW</small><b>{state ? compact(state.live_watchers) : '—'}</b></div><div><small><Clock3 size={14} /> CURRENT REIGN</small><b>{state ? reignTime : '—'}</b></div></div>
+            <a className="phone-take" href="#join"><Zap size={20} fill="currentColor" />TAKE THE SCREEN</a>
+            <div className="phone-bottom"><span><Zap />LIVE</span><span><Swords />CHALLENGES</span><span><ShieldCheck />HALL</span><span><Users />YOU</span></div>
+          </div>
+          <div className="signal-badge"><span>ONE OWNER.<br />EVERYONE<br />WATCHING.</span><ArrowRight /></div>
         </div>
         <div className="hero-index" aria-hidden="true">001 / ∞</div>
       </section>
+      <div className="takeover-tape" aria-hidden="true"><div>{Array.from({ length: 4 }, (_, i) => <span key={i}>ONE PERSON. <b>ONE MESSAGE.</b> THE WHOLE WORLD. <Zap fill="currentColor" /></span>)}</div></div>
 
       <section id="live" className="live-wrapper">
-        <div className="section-intro"><span>LIVE / RIGHT NOW</span><h2>DON'T TAKE OUR<br />WORD FOR IT.</h2><p>This is the actual global screen. No mock data. No polite little demo.</p></div>
+        <div className="section-intro"><span>01 / THE GLOBAL SCREEN</span><h2>RIGHT NOW.<br /><em>ONE OWNER.</em></h2><p>Same screen. Same message. Anywhere on Earth. This is the live reign from the app.</p></div>
       {state ? (
         <div className="stage-layout">
           <section className="live-stage" aria-live="polite">
@@ -240,7 +265,7 @@ export default function Home() {
             <div className="accent-rule"><span /><em>TAKE IT IN THE ANDROID APP</em></div>
             <div className="crowd-strip">
               {reactions.length ? reactions.map((reaction, index) => (
-                <span key={`${reaction.created_at_ms}-${index}`}><b>{reaction.reaction}</b> {reaction.handle}</span>
+                <span key={`${reaction.created_at_ms}-${index}`}><b aria-label={reaction.reaction}>{reactionIcon[reaction.reaction] || '✨'}</b> {reaction.handle}</span>
               )) : <span><b>THE CROWD IS QUIET.</b> SOMEONE MAKE A MOVE.</span>}
             </div>
           </section>
@@ -252,7 +277,7 @@ export default function Home() {
             <Metric icon={<Eye />} value={compact(state.app_views + state.web_views)} label="VERIFIED VIEWS" />
             <Metric icon={<ShieldCheck />} value={compact(state.takeovers_today)} label="TAKEOVERS TODAY" />
             <div className="source-split"><span>APP <b>{compact(state.app_views)}</b></span><span>WEB <b>{compact(state.web_views)}</b></span></div>
-            <div className="download-card"><small>THINK YOU CAN TAKE IT?</small><strong>THE WEB CAN WATCH.<br />ONLY THE APP CAN STEAL.</strong><span>Android closed beta opening soon.</span></div>
+            <a href={PLAY_URL} className="download-card"><small>THINK YOU CAN TAKE IT?</small><strong>THE WEB CAN WATCH.<br />ONLY THE APP CAN STEAL.</strong><span>Already a tester? Open Google Play ↗</span></a>
           </aside>
 
           <section className="battle-feed">
@@ -272,13 +297,14 @@ export default function Home() {
       ) : (
         <section className="connection-state">
           <span>1</span>
-          <p>{status === 'unconfigured' ? 'THE LIVE BACKEND IS NOT CONNECTED YET.' : 'CONNECTING TO THE ONLY SCREEN…'}</p>
-          <small>{status === 'unconfigured' ? 'Set the Supabase public URL and key to begin the founding reign.' : 'No simulated audience. No fake numbers.'}</small>
+          <p>{status === 'connecting' ? 'TUNING INTO THE WORLD…' : 'THE SCREEN IS TAKING A BREATHER.'}</p>
+          <small>{status === 'connecting' ? 'The latest reign will appear here.' : 'Live updates are temporarily unavailable. Try again in a moment.'}</small>
+          {status !== 'connecting' && <button className="ghost-cta" onClick={() => void load()}>RECONNECT <Radio /></button>}
         </section>
       )}
       </section>
 
-      <section className="mechanics">
+      <section className="mechanics" id="how">
         <div className="mechanics-heading"><span>HOW ONE WORKS</span><h2>THREE MOVES.<br />ZERO HIDING.</h2></div>
         <div className="mechanic-grid">
           <article><b>01</b><div className="mechanic-icon"><Eye /></div><h3>WATCH</h3><p>The whole world sees the same message, at the same time. No feeds. No algorithm. Just ONE.</p></article>
@@ -288,9 +314,10 @@ export default function Home() {
       </section>
 
       <section className="screen-reel" aria-label="Inside the ONE app">
+        <div className="reel-heading"><span>03 / IN YOUR HANDS</span><h2>SMALL SCREEN.<br />GLOBAL ENERGY.</h2><p>The ONE visual direction. Swipe to explore the screens.</p></div>
         <div className="reel-track">
-          {['one-words.png','one-takeover.png','one-proof.png','one-hall.png','one-stolen.png'].map((image, index) => (
-            <figure key={image}><Image src={`/screens/${image}`} alt={`ONE app experience ${index + 1}`} fill sizes="(max-width: 700px) 72vw, 330px" /><figcaption>0{index + 1} / ONE</figcaption></figure>
+          {['core-design.png','supporting-design.png'].map((image, index) => (
+            <figure key={image}><Image src={`/screens/${image}`} alt={index === 0 ? 'ONE design: enter, watch, challenge, and own the screen' : 'ONE design: revenge, tickets, leaderboard, and your profile'} fill sizes="(max-width: 700px) 1100px, 1200px" /><figcaption>{index === 0 ? 'ENTER / WATCH / TAKE / OWN' : 'REVENGE / TICKETS / HALL / YOU'}</figcaption></figure>
           ))}
         </div>
       </section>
@@ -311,7 +338,7 @@ export default function Home() {
         </div>
         <div className="tester-card">
           {testerStatus === 'sent' ? (
-            <div className="tester-success" role="status"><Check /><span>YOU&apos;RE ON THE LIST.</span><p>We&apos;ll email you when a tester place opens. Use this same Google account on your Android phone.</p><button type="button" onClick={() => setTesterStatus('idle')}>ADD ANOTHER EMAIL <ArrowRight /></button></div>
+            <div className="tester-success" role="status"><Check /><span>REQUEST RECEIVED.</span><p>{inviteEmailed ? 'Check your inbox for the next steps. Google Play access requires your account to be on the tester list.' : 'Your interest is saved. We’ll contact you about test access. Use this same Google account on your Android phone.'}</p><a href={PLAY_URL} className="primary-cta">OPEN GOOGLE PLAY <ArrowRight /></a><button type="button" onClick={() => setTesterStatus('idle')}>ADD ANOTHER EMAIL <ArrowRight /></button></div>
           ) : (
             <form onSubmit={submitTesterInterest}>
               <div className="form-head"><span>TEST ONE BEFORE LAUNCH</span><b>LIMITED PLACES</b></div>

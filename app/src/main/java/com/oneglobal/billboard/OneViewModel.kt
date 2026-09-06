@@ -281,6 +281,7 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun react(reaction: String) {
+        if (reaction in world.value.myReactions) { showToast("You've already sent this reaction for this reign."); return }
         viewModelScope.launch { repository.react(reaction) }
     }
 
@@ -370,13 +371,21 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         _ui.update { it.copy(overlay = Overlay.NONE) }
     }
 
+    fun identityStatus(message: String) {
+        _ui.update { it.copy(identityError = message, identityBusy = false) }
+    }
+
+    fun beginGoogleIdentity() {
+        _ui.update { it.copy(identityError = "Choose a Google account to protect your handle.", identityBusy = true) }
+    }
+
     fun googleIdentity(token: String, nonce: String, restore: Boolean) {
-        if (_ui.value.identityBusy) return
         _ui.update { it.copy(identityBusy = true, identityError = null) }
         viewModelScope.launch {
             try {
-                repository.googleIdentity(token, nonce, restore)
-                _ui.update { it.copy(overlay = Overlay.NONE, toast = "Google connected. Your identity is saved.") }
+                kotlinx.coroutines.withTimeout(30_000) { repository.googleIdentity(token, nonce, restore) }
+                profilePreferences.edit().putBoolean("google_linked_${world.value.currentUserId}", true).apply()
+                _ui.update { it.copy(overlay = Overlay.IDENTITY, identityLinked = true, identityError = null, toast = "Google connected. Your identity is saved.") }
             } catch (e: Exception) {
                 _ui.update { it.copy(identityError = e.message ?: "Could not connect Google.") }
             } finally { _ui.update { it.copy(identityBusy = false) } }
@@ -388,6 +397,7 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         _ui.update {
             it.copy(
                 overlay = Overlay.IDENTITY,
+                identityLinked = profilePreferences.getBoolean("google_linked_$userId", false),
                 recoveryCode = userId.takeIf(String::isNotBlank)
                     ?.let { id -> profilePreferences.getString("recovery_code_$id", null) },
                 recoveryHandle = "",

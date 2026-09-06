@@ -15,8 +15,10 @@ export async function POST(request: Request) {
 
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+    let saved = false;
     if (supabaseUrl && supabaseKey) {
-      await fetch(`${supabaseUrl}/rest/v1/tester_interest`, { method: 'POST', headers: { apikey: supabaseKey, authorization: `Bearer ${supabaseKey}`, 'content-type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ email, name: name || null, device, source: 'one_launch_site' }) });
+      const storage = await fetch(`${supabaseUrl}/rest/v1/tester_interest`, { method: 'POST', headers: { apikey: supabaseKey, authorization: `Bearer ${supabaseKey}`, 'content-type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ email, name: name || null, device, source: 'one_launch_site' }) });
+      saved = storage.ok || storage.status === 409;
     }
 
     const apiKey = process.env.RESEND_API_KEY;
@@ -29,6 +31,7 @@ export async function POST(request: Request) {
       });
       if (!response.ok) return Response.json({ error: 'The invite could not be sent.' }, { status: 502 });
     }
+    if (!saved && !(apiKey && playUrl)) return Response.json({ error: 'Test requests are temporarily unavailable.' }, { status: 503 });
     return Response.json({ ok: true, emailed: Boolean(apiKey && playUrl) });
   } catch { return Response.json({ error: 'Something went wrong.' }, { status: 500 }); }
 }

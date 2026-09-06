@@ -14,10 +14,12 @@ Implemented in Android:
 - Migrations `202609050001` through `202609050003` have been applied by the project owner.
 
 ## Must verify before release
+0. Apply `202609060001_unique_reactions.sql` once, in full. It is transactional and rerunnable. It keeps historical rows, counts unique voters and prevents repeated emoji reactions in the same reign. This new migration has NOT been applied remotely by Codex.
 1. Verify identity ID, handle, reigns, Hall, and balance before/after Google linking, Play update, process death, Google cancellation, refresh failure and cross-device restore. Do not uninstall an unlinked identity to test upgrades.
 2. Android challenge URL handling exists, but automatic App Link opening needs the website's `/.well-known/assetlinks.json` using the Play signing SHA-256. Without domain verification Android may keep opening the website.
 
 ## Remaining integrations — do not advertise as shipped
+- See `MONETIZATION-SETUP.md` for the prepared AdMob adapter and disabled authenticated checkout endpoint. The owner confirmed on September 6 that AdMob IDs and the RevenueCat Funnel have not yet been created. Activation and end-to-end monetization remain pending.
 - AdMob app ID, rewarded unit ID, consent setup, RevenueCat AdMob adapter and SSV rule. Configure https://api.revenuecat.com/v1/incoming-webhooks/admob-ssv-rewarded.
 - Use a separate verified skip reward, not client-side credits. ONE uses its own server ticket ledger, so a verified RevenueCat reward still needs an idempotent bridge to that ledger or a server-verified skip redemption. A local earned callback is NOT sufficient.
 - Daily ad cap is configurable (default 3) but not enforced by an ad flow yet because that flow is not integrated.
