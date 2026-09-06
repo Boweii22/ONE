@@ -10,6 +10,10 @@ const anton = Anton({ variable: '--font-display', subsets: ['latin'], weight: '4
 export const metadata: Metadata = {
   title: 'ONE — The Only Live Screen',
   description: 'One person owns it. Everyone can see it. Anyone in the Android app can steal it.',
+  icons: {
+    icon: '/favicon.svg',
+    apple: '/one-app-icon.png',
+  },
   openGraph: {
     title: 'ONE — The Only Live Screen',
     description: 'One owner. One message. Take it.',
