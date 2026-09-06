@@ -287,7 +287,7 @@ export default function Home() {
                 <article key={item.sequence} className={index === 0 ? 'current' : ''}>
                   <span className="feed-seq">#{item.sequence}</span>
                   <div><strong>{item.owner}</strong><p>{item.message}</p></div>
-                  {item.used_ticket && <em>REVENGE</em>}
+                  {item.used_ticket && <em>CREDIT SKIP</em>}
                   <time>{duration(now - item.started_at_ms)}</time>
                 </article>
               ))}
@@ -316,8 +316,12 @@ export default function Home() {
       <section className="screen-reel" aria-label="Inside the ONE app">
         <div className="reel-heading"><span>03 / IN YOUR HANDS</span><h2>SMALL SCREEN.<br />GLOBAL ENERGY.</h2><p>The ONE visual direction. Swipe to explore the screens.</p></div>
         <div className="reel-track">
-          {['core-design.png','supporting-design.png'].map((image, index) => (
-            <figure key={image}><Image src={`/screens/${image}`} alt={index === 0 ? 'ONE design: enter, watch, challenge, and own the screen' : 'ONE design: revenge, tickets, leaderboard, and your profile'} fill sizes="(max-width: 700px) 1100px, 1200px" /><figcaption>{index === 0 ? 'ENTER / WATCH / TAKE / OWN' : 'REVENGE / TICKETS / HALL / YOU'}</figcaption></figure>
+          {[
+            ['one-live.png', 'The live ONE global screen', 'WATCH / REACT / TAKE'],
+            ['one-words.png', 'The approved message library', 'WRITE / APPROVE / DEPLOY'],
+            ['one-hall.png', 'The real ONE leaderboard', 'REIGNS / TAKEOVERS / HALL'],
+          ].map(([image, alt, caption]) => (
+            <figure key={image}><Image src={`/screens/${image}`} alt={alt} fill sizes="(max-width: 700px) 78vw, 360px" /><figcaption>{caption}</figcaption></figure>
           ))}
         </div>
       </section>

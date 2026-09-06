@@ -19,13 +19,14 @@ Deno.serve(async (request) => {
   const userId = String(event?.app_user_id ?? "");
   const productId = String(event?.product_id ?? "");
   const type = String(event?.type ?? "");
+  // ONE_PRODUCT_TICKETS remains a temporary backwards-compatible secret name.
+  // There is deliberately no guessed product map: every ID must come from the dashboard.
   const grants: Record<string, number> = JSON.parse(
-    Deno.env.get("ONE_PRODUCT_TICKETS") ??
-      '{"one_spark":3,"one_challenger":20,"one_headliner":50}',
+    Deno.env.get("ONE_PRODUCT_CREDITS") ?? Deno.env.get("ONE_PRODUCT_TICKETS") ?? "{}",
   );
-  const tickets = grants[productId] ?? 0;
+  const credits = grants[productId] ?? 0;
 
-  if (!eventId || !userId || !tickets || !["INITIAL_PURCHASE", "NON_RENEWING_PURCHASE"].includes(type)) {
+  if (!eventId || !userId || !credits || !["INITIAL_PURCHASE", "NON_RENEWING_PURCHASE"].includes(type)) {
     return new Response(JSON.stringify({ ok: true, ignored: true }), { headers: cors });
   }
 
@@ -38,12 +39,12 @@ Deno.serve(async (request) => {
     p_event_id: eventId,
     p_user_id: userId,
     p_product_id: productId,
-    p_tickets: tickets,
+    p_tickets: credits,
     p_raw_event: event,
   });
 
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: cors });
   }
-  return new Response(JSON.stringify({ ok: true, granted: tickets }), { headers: cors });
+  return new Response(JSON.stringify({ ok: true, granted: credits }), { headers: cors });
 });

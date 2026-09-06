@@ -103,7 +103,7 @@ class CloudOneRepository(context: Context) : OneRepository {
             val requestId = UUID.randomUUID().toString()
             onPhase(ChallengePhase.VERIFYING, "CHECKING MESSAGE + COOLDOWN")
             if (before.cooldownRemainingSeconds > 0) {
-                onPhase(ChallengePhase.SPENDING, "VERIFYING ONE REVENGE TICKET")
+                onPhase(ChallengePhase.SPENDING, "VERIFYING 1 ONE CREDIT")
             } else {
                 onPhase(ChallengePhase.SPENDING, "FREE TAKEOVER // NOTHING TO SPEND")
             }
@@ -162,7 +162,7 @@ class CloudOneRepository(context: Context) : OneRepository {
         scope.launch {
             delay(700)
             runCatching { refreshWorld() }
-            _events.emit(OneEvent.Error("Purchase received. The server is verifying your Revenge Tickets."))
+            _events.emit(OneEvent.Error("Purchase received. The server is verifying your ONE Credits."))
         }
     }
 

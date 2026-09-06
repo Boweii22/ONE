@@ -186,7 +186,7 @@ class DemoOneRepository : OneRepository {
         delay(620)
         onPhase(ChallengePhase.VERIFYING, "VERIFYING MESSAGE APPROVAL")
         delay(540)
-        onPhase(ChallengePhase.SPENDING, if (cost == 0) "FREE TAKEOVER" else "SPENDING 1 REVENGE TICKET")
+        onPhase(ChallengePhase.SPENDING, if (cost == 0) "FREE TAKEOVER" else "SPENDING 1 ONE CREDIT")
         delay(700)
         onPhase(ChallengePhase.COMMITTING, "COMMITTING GLOBAL OWNERSHIP")
         delay(620)

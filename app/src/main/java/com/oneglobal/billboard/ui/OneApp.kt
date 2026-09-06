@@ -695,7 +695,7 @@ private fun AuctionCard(
                     isOwner -> "⚡  BROADCAST YOUR REIGN"
                     protectedSeconds > 0 -> "TAKEOVER LANDS IN ${protectedSeconds}s"
                     cooldown == 0 -> "⚡  TAKE THE SCREEN"
-                    canRevenge -> "🎟  REVENGE NOW — 1 TICKET"
+                    canRevenge -> "ϟ  SKIP COOLDOWN — 1 CREDIT"
                     else -> "FREE STEAL RECHARGES IN ${cooldown}s"
                 },
                 fontWeight = FontWeight.Black,
@@ -903,7 +903,7 @@ private fun YouScreen(
             Box(Modifier.width(1.dp).height(56.dp).background(Color.White.copy(alpha = .16f)))
             Column(Modifier.padding(start = 16.dp).clickable(onClick = onVault), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(world.credits.toString(), color = Acid, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 25.sp)
-                Text("TICKETS", color = Muted, fontFamily = mono, fontSize = 12.sp)
+                Text("ONE CREDITS", color = Muted, fontFamily = mono, fontSize = 12.sp)
             }
         }
         Spacer(Modifier.height(22.dp))
@@ -942,8 +942,8 @@ private fun YouScreen(
         )
         Spacer(Modifier.height(10.dp))
         SettingsCard(
-            title = "REVENGE TICKETS",
-            detail = if (revenueCatReady) "Live ticket packs are connected and server verified." else "Add the public SDK key to activate ticket packs.",
+            title = "ONE CREDITS",
+            detail = if (revenueCatReady) "Credit packs are connected and server verified." else "Add the public SDK key to activate credit packs.",
             badge = "›",
             accent = Acid,
             onClick = onVault,
@@ -1000,7 +1000,7 @@ private fun YouScreen(
         )
         Spacer(Modifier.height(18.dp))
         Text(if (world.connected) "GLOBAL LEDGER CONNECTED" else "GLOBAL LEDGER OFFLINE", color = if (world.connected) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.2.sp)
-        Text("Ownership, cooldowns, tickets, views and race ordering are controlled by the server.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 7.dp))
+        Text("Ownership, cooldowns, credits, views and race ordering are controlled by the server.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 7.dp))
     }
 }
 
@@ -1079,7 +1079,7 @@ private fun ChallengeOverlay(
 
                 ChallengeChoice("ϟ", "FREE STEAL", "Fastest path. Ready after cooldown.", if (needsTicket) "${world.cooldownRemainingSeconds}s" else "READY", Acid, selected = !needsTicket)
                 Spacer(Modifier.height(10.dp))
-                ChallengeChoice("🎟", "REVENGE TICKET", "Skip the cooldown. Spent only if you win.", "${world.credits} LEFT", Ice, selected = needsTicket && world.credits > 0, onClick = if (world.credits == 0) onOpenVault else null)
+                ChallengeChoice("ϟ", "ONE CREDIT", "Skip the cooldown. Spent only if you win.", "${world.credits} LEFT", Ice, selected = needsTicket && world.credits > 0, onClick = if (world.credits == 0) onOpenVault else null)
                 Spacer(Modifier.height(10.dp))
                 ChallengeChoice("LIVE", "LIVE CHALLENGE", "Hold to submit an atomic server-verified takeover.", "ATOMIC", Orange, selected = false)
                 Spacer(Modifier.height(16.dp))
@@ -1102,10 +1102,10 @@ private fun ChallengeOverlay(
                                 Spacer(Modifier.height(10.dp))
                             }
                             if (!canAttempt) {
-                                PrimaryButton("GET A REVENGE TICKET", Ice, onOpenVault)
+                                PrimaryButton("GET ONE CREDITS", Ice, onOpenVault)
                             } else {
                                 HoldToOwnButton(
-                                    text = if (needsTicket) "HOLD TO CONTINUE — 1 TICKET" else "HOLD TO CONTINUE — FREE",
+                                    text = if (needsTicket) "HOLD TO CONTINUE — 1 CREDIT" else "HOLD TO CONTINUE — FREE",
                                     enabled = selected != null,
                                     onComplete = onBegin,
                                 )
@@ -1240,7 +1240,7 @@ private fun IdentityOverlay(
     if (confirmRestore) androidx.compose.material3.AlertDialog(
         onDismissRequest = { confirmRestore = false },
         title = { Text("Switch to your Google account?") },
-        text = { Text("This switches away from the current identity. Its history and tickets are not merged. Link your current identity first if you want to keep it.") },
+        text = { Text("This switches away from the current identity. Its history and credits are not merged. Link your current identity first if you want to keep it.") },
         confirmButton = { TextButton(onClick = { confirmRestore = false; onGoogle(true) }) { Text("Restore account") } },
         dismissButton = { TextButton(onClick = { confirmRestore = false }) { Text("Cancel") } },
     )
@@ -1598,14 +1598,14 @@ private fun VaultOverlay(
     ) {
         OverlayHeader("‹", if (revenueCatReady) "LIVE STORE" else "STORE OFFLINE", onClose)
         Spacer(Modifier.height(24.dp))
-        Text("REVENGE TICKETS.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 40.sp, letterSpacing = (-1.8).sp)
+        Text("ONE CREDITS.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 40.sp, letterSpacing = (-1.8).sp)
         Text("Skip your cooldown. Take ONE back now.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
         Box(Modifier.fillMaxWidth().padding(vertical = 18.dp).height(1.dp).background(Color.White.copy(alpha = .14f)))
         Text("YOUR BALANCE", color = Muted, fontFamily = mono, fontSize = 12.sp)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp, bottom = 20.dp)) {
             Text("🎟", fontSize = 27.sp)
             Spacer(Modifier.width(12.dp))
-            Text("${formatNumber(world.credits)} TICKETS", color = Acid, fontWeight = FontWeight.Black, fontSize = 22.sp)
+            Text("${formatNumber(world.credits)} CREDITS", color = Acid, fontWeight = FontWeight.Black, fontSize = 22.sp)
         }
 
         CreditPack("ϟ", "SPARK", 3, "£0.99", Acid) { onPurchase(3) }
@@ -1614,7 +1614,7 @@ private fun VaultOverlay(
         Spacer(Modifier.height(11.dp))
         CreditPack("♛", "HEADLINER", 50, "£9.99", Orange) { onPurchase(50) }
         Spacer(Modifier.height(22.dp))
-        Text("PURCHASES ARE PROCESSED BY GOOGLE PLAY AND VERIFIED SERVER-SIDE BEFORE TICKETS ARE ADDED.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text("PURCHASES ARE PROCESSED BY GOOGLE PLAY AND VERIFIED SERVER-SIDE BEFORE CREDITS ARE ADDED.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(14.dp))
         Surface(modifier = Modifier.fillMaxWidth().clickable(enabled = revenueCatReady, onClick = onRestore), color = Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .16f))) {
             Text("↻  RESTORE GOOGLE PLAY PURCHASES", color = if (revenueCatReady) Paper else Muted, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
@@ -1758,7 +1758,7 @@ private fun DeleteAccountOverlay(
         Spacer(Modifier.height(30.dp))
         Text("DELETE YOUR\nONE IDENTITY.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 40.sp)
         Text(
-            "This permanently deletes your anonymous account, handle, message library, reactions, reports, tickets and device session. Past reigns remain only as anonymised @DELETED ledger entries so the global record cannot be rewritten.",
+            "This permanently deletes your anonymous account, handle, message library, reactions, reports, credits and device session. Past reigns remain only as anonymised @DELETED ledger entries so the global record cannot be rewritten.",
             color = Muted,
             fontFamily = mono,
             fontSize = 12.sp,
@@ -2065,7 +2065,7 @@ private fun WalletHero(credits: Int, onClick: () -> Unit) {
                 Text("ONE VAULT", color = Muted, fontFamily = mono, fontSize = 12.sp, letterSpacing = 1.1.sp)
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(formatNumber(credits), color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 39.sp, letterSpacing = (-1).sp)
-                    Text(" TICKETS", color = Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    Text(" CREDITS", color = Acid, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
                 }
             }
             Box(Modifier.size(50.dp).clip(CircleShape).background(Acid), contentAlignment = Alignment.Center) {
@@ -2089,7 +2089,7 @@ private fun DailyCapCard(world: WorldState) {
         Spacer(Modifier.width(14.dp))
         Column {
             Text("FREE STEAL CHARGE", color = Paper, fontWeight = FontWeight.Black, fontSize = 14.sp)
-            Text(if (world.cooldownRemainingSeconds == 0) "Ready now. Your next takeover costs nothing." else "Wait or spend one Revenge Ticket to move instantly.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(if (world.cooldownRemainingSeconds == 0) "Ready now. Your next takeover costs nothing." else "Wait or spend 1 ONE Credit to move instantly.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
@@ -2098,7 +2098,7 @@ private fun DailyCapCard(world: WorldState) {
 private fun SettingsCard(title: String, detail: String, badge: String, accent: Color, onClick: () -> Unit) {
     val icon = when {
         title.contains("ALERT") || title.contains("NOTIFICATION") -> "♢"
-        title.contains("TICKET") -> "ϟ"
+        title.contains("CREDIT") -> "ϟ"
         title.contains("PRIVACY") -> "⬡"
         title.contains("INVITE") -> "◎"
         title.contains("SUPPORT") || title.contains("FEEDBACK") -> "?"
@@ -2129,7 +2129,7 @@ private fun CreditPack(icon: String, name: String, amount: Int, price: String, c
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(name, color = Ink, fontWeight = FontWeight.Black, fontSize = 20.sp)
-                Text("${formatNumber(amount)} TICKETS", color = Ink.copy(alpha = .76f), fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
+                Text("${formatNumber(amount)} CREDITS", color = Ink.copy(alpha = .76f), fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
             }
             Canvas(Modifier.width(1.dp).height(72.dp)) {
                 val dash = 5.dp.toPx()

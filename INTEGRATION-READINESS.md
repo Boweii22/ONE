@@ -21,7 +21,7 @@ Implemented in Android:
 ## Remaining integrations — do not advertise as shipped
 - See `MONETIZATION-SETUP.md` for the prepared AdMob adapter and disabled authenticated checkout endpoint. The owner confirmed on September 6 that AdMob IDs and the RevenueCat Funnel have not yet been created. Activation and end-to-end monetization remain pending.
 - AdMob app ID, rewarded unit ID, consent setup, RevenueCat AdMob adapter and SSV rule. Configure https://api.revenuecat.com/v1/incoming-webhooks/admob-ssv-rewarded.
-- Use a separate verified skip reward, not client-side credits. ONE uses its own server ticket ledger, so a verified RevenueCat reward still needs an idempotent bridge to that ledger or a server-verified skip redemption. A local earned callback is NOT sufficient.
+- Use a separate verified ad-skip reward, not client-side ONE Credits. The production economy is fixed in `ECONOMY.md`: takeovers are free when ready and one credit skips one active cooldown. A verified RevenueCat reward still needs an idempotent server redemption; a local earned callback is NOT sufficient.
 - Daily ad cap is configurable (default 3) but not enforced by an ad flow yet because that flow is not integrated.
 - RevenueCat Funnel URL, Stripe/RevenueCat product mapping and authenticated app-user identity handoff. Web purchases must be reconciled server-side exactly once. Do not add a mobile external-purchase CTA without checking Play policy/region eligibility.
 - Update privacy policy and Play Data Safety for optional Google authentication, public photos, country and advertising before rollout.

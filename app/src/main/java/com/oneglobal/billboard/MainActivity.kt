@@ -169,16 +169,18 @@ class MainActivity : ComponentActivity() {
         }
         Purchases.sharedInstance.getOfferings(object : ReceiveOfferingsCallback {
             override fun onReceived(offerings: com.revenuecat.purchases.Offerings) {
-                val ticketOffering = offerings.all["tickets"] ?: offerings.current
-                val productId = when {
-                    requestedAmount >= 50 -> "one_tickets_headliner_v1"
-                    requestedAmount >= 20 -> "one_tickets_challenger_v1"
-                    else -> "one_tickets_spark_v1"
+                // "tickets" and one_tickets_* are legacy dashboard identifiers.
+                // Keep them as fallbacks because store product IDs cannot be renamed.
+                val creditOffering = offerings.all["credits"] ?: offerings.all["tickets"] ?: offerings.current
+                val productIds = when {
+                    requestedAmount >= 50 -> setOf("one_credits_headliner_v1", "one_tickets_headliner_v1")
+                    requestedAmount >= 20 -> setOf("one_credits_challenger_v1", "one_tickets_challenger_v1")
+                    else -> setOf("one_credits_spark_v1", "one_tickets_spark_v1")
                 }
-                val packageToBuy = ticketOffering?.availablePackages
-                    ?.firstOrNull { it.product.id == productId }
+                val packageToBuy = creditOffering?.availablePackages
+                    ?.firstOrNull { it.product.id in productIds }
                 if (packageToBuy == null) {
-                    result(false, "This Revenge Ticket pack is not available right now.", 0)
+                    result(false, "This ONE Credit pack is not available right now.", 0)
                     return
                 }
                 Purchases.sharedInstance.purchase(
@@ -189,7 +191,7 @@ class MainActivity : ComponentActivity() {
                             customerInfo: CustomerInfo,
                         ) {
                             Purchases.sharedInstance.invalidateVirtualCurrenciesCache()
-                            result(true, "$requestedAmount Revenge Tickets are being verified.", requestedAmount)
+                            result(true, "$requestedAmount ONE Credits are being verified.", requestedAmount)
                         }
 
                         override fun onError(error: PurchasesError, userCancelled: Boolean) {

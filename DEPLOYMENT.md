@@ -17,7 +17,7 @@ supabase functions deploy onesignal-takeover
 
 ```bash
 supabase secrets set REVENUECAT_WEBHOOK_SECRET=GENERATE_A_LONG_RANDOM_VALUE
-supabase secrets set ONE_PRODUCT_TICKETS='{"one_spark":3,"one_challenger":20,"one_headliner":50}'
+supabase secrets set ONE_PRODUCT_CREDITS='{"one_credits_spark_v1":3,"one_credits_challenger_v1":20,"one_credits_headliner_v1":50,"one_tickets_spark_v1":3,"one_tickets_challenger_v1":20,"one_tickets_headliner_v1":50}'
 supabase secrets set ONESIGNAL_APP_ID=YOUR_APP_ID
 supabase secrets set ONESIGNAL_REST_API_KEY=YOUR_REST_KEY
 supabase secrets set TAKEOVER_HOOK_SECRET=GENERATE_ANOTHER_LONG_RANDOM_VALUE
@@ -28,11 +28,13 @@ supabase secrets set TAKEOVER_HOOK_SECRET=GENERATE_ANOTHER_LONG_RANDOM_VALUE
 
 ## 2. RevenueCat and Google Play
 
-Create three consumable Play products whose RevenueCat product identifiers map to:
+Create three consumable Play products whose RevenueCat product identifiers map to (see `ECONOMY.md`):
 
-- `one_spark` — 3 Revenge Tickets.
-- `one_challenger` — 20 Revenge Tickets.
-- `one_headliner` — 50 Revenge Tickets.
+- `one_credits_spark_v1` — 3 ONE Credits.
+- `one_credits_challenger_v1` — 20 ONE Credits.
+- `one_credits_headliner_v1` — 50 ONE Credits.
+
+Keep any already-reserved `one_tickets_*` Android product IDs as legacy aliases rather than deleting or recreating them.
 
 Place their packages in the current Offering in that order. Configure a RevenueCat webhook pointing to:
 
