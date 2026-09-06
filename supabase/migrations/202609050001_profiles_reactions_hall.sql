@@ -73,10 +73,22 @@ end $$;
 revoke all on function public.react_to_one(text) from public, anon;
 grant execute on function public.react_to_one(text) to authenticated;
 
--- Retain the existing block/content filtering rather than replacing it.
-alter function public.get_one_state() rename to get_one_state_before_profile_stats;
+-- Retain the existing block/content filtering rather than replacing it. On a
+-- rerun the preserved function may already exist, so only rename once.
+do $$ begin
+  if not exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'get_one_state_before_profile_stats'
+      and p.pronargs = 0
+  ) and exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'get_one_state' and p.pronargs = 0
+  ) then
+    alter function public.get_one_state() rename to get_one_state_before_profile_stats;
+  end if;
+end $$;
 revoke all on function public.get_one_state_before_profile_stats() from public, anon, authenticated;
-create function public.get_one_state()
+create or replace function public.get_one_state()
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare v_state jsonb := public.get_one_state_before_profile_stats(); v_uid uuid := auth.uid(); v_owner uuid; v_reign uuid; v_photo uuid; v_counts jsonb;
 begin
