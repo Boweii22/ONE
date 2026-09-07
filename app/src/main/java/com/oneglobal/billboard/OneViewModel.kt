@@ -134,7 +134,14 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                             toast = "ACCOUNT DELETED // FRESH ANONYMOUS IDENTITY CREATED",
                         )
                     }
-                    is OneEvent.Error -> _ui.update { it.copy(toast = event.message) }
+                    is OneEvent.Error -> _ui.update {
+                        // A failed feedback request used to leave its button permanently
+                        // stuck on SENDING. Keep the draft open and make retry immediate.
+                        it.copy(
+                            toast = event.message,
+                            feedbackSending = if (it.overlay == Overlay.FEEDBACK) false else it.feedbackSending,
+                        )
+                    }
                 }
             }
         }
@@ -400,6 +407,8 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         _ui.update {
             it.copy(
                 overlay = Overlay.IDENTITY,
+                // Local preference is only an optimistic cache. The auth profile
+                // is the authority after a reinstall or a different device.
                 identityLinked = profilePreferences.getBoolean("google_linked_$userId", false),
                 recoveryCode = userId.takeIf(String::isNotBlank)
                     ?.let { id -> profilePreferences.getString("recovery_code_$id", null) },
@@ -408,6 +417,15 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                 identityBusy = false,
                 identityError = null,
             )
+        }
+        viewModelScope.launch {
+            runCatching { repository.isGoogleIdentityLinked() }
+                .onSuccess { linked ->
+                    if (linked) profilePreferences.edit().putBoolean("google_linked_$userId", true).apply()
+                    _ui.update { current ->
+                        if (current.overlay == Overlay.IDENTITY) current.copy(identityLinked = linked) else current
+                    }
+                }
         }
     }
 

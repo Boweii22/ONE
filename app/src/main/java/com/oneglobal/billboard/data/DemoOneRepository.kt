@@ -374,6 +374,8 @@ class DemoOneRepository : OneRepository {
         error("Google identity requires a connected account.")
     }
 
+    override suspend fun isGoogleIdentityLinked(): Boolean = false
+
     override suspend fun updatePhoto(jpeg: ByteArray?) {
         error("Profile photos require a connected account.")
     }

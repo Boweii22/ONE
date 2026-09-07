@@ -1,5 +1,7 @@
 package com.oneglobal.billboard.ui
 
+import android.content.Context
+import android.telephony.TelephonyManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,8 +12,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
-fun suggestedCountry(): String = Locale.getDefault().country.uppercase(Locale.ROOT)
-    .takeIf { it in Locale.getISOCountries() }.orEmpty()
+/**
+ * This is deliberately not based on Locale. A phone set to English (UK) is not
+ * evidence that its owner is from the United Kingdom. SIM is the best coarse,
+ * permission-free hint; the current carrier is a useful fallback. The person
+ * always gets the final say in the picker.
+ */
+fun suggestedCountry(context: Context): String {
+    val telephony = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+    val candidate = sequenceOf(telephony?.simCountryIso, telephony?.networkCountryIso)
+        .firstOrNull { !it.isNullOrBlank() }
+        ?.uppercase(Locale.ROOT)
+    return candidate?.takeIf { it in Locale.getISOCountries() }.orEmpty()
+}
 
 fun countryLabel(code: String): String {
     if (code !in Locale.getISOCountries()) return "Country not shared"
@@ -21,8 +34,10 @@ fun countryLabel(code: String): String {
 
 @Composable
 fun CountryPicker(code: String, onChange: (String) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val detected = remember(context) { suggestedCountry(context) }
     var choosing by remember { mutableStateOf(false) }
-    var lastCountry by remember { mutableStateOf(code.ifBlank { suggestedCountry() }) }
+    var lastCountry by remember { mutableStateOf(code.ifBlank { detected }) }
     Column {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("SHOW MY COUNTRY", modifier = Modifier.weight(1f).padding(top = 12.dp))
@@ -34,7 +49,10 @@ fun CountryPicker(code: String, onChange: (String) -> Unit) {
         TextButton(onClick = { choosing = true }) {
             Text(if (code.isBlank()) "Choose country" else countryLabel(code) + " · Change")
         }
-        Text("Suggested from your device region, not your physical location. Country only. No GPS.")
+        Text(
+            if (detected.isBlank()) "Choose a country only if you want to share it. No GPS, no location permission."
+            else "Suggested from your SIM or mobile network. You can change it or switch it off. No GPS.",
+        )
     }
     if (choosing) AlertDialog(
         onDismissRequest = { choosing = false },

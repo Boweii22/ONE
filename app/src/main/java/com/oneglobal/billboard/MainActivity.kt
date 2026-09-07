@@ -267,7 +267,10 @@ class MainActivity : ComponentActivity() {
             } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
                 viewModel.identityStatus("Google sign-in cancelled. You can try again whenever you're ready.")
             } catch (e: Exception) {
-                viewModel.identityStatus("Google could not finish sign-in (${e.javaClass.simpleName}). Please try again. Your handle is safe.")
+                // Keep the handle safe, but expose the provider's useful reason so
+                // a Play build with a missing SHA/client configuration is diagnosable.
+                val detail = e.message?.takeIf { it.isNotBlank() }?.take(180) ?: e.javaClass.simpleName
+                viewModel.identityStatus("Google could not finish sign-in: $detail. Your handle is unchanged.")
             }
         }
     }

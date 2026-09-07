@@ -97,6 +97,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -497,6 +498,7 @@ private fun LiveScreen(
         ) {
             LiveHeader(world, accent, onShareONE, onReport)
             Spacer(Modifier.height(20.dp))
+            if (!world.currentContentBlocked) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ProfilePhoto(world.reign.owner, accent, Modifier.size(58.dp))
                 Spacer(Modifier.width(14.dp))
@@ -525,6 +527,9 @@ private fun LiveScreen(
                 city = world.reign.owner.city,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 300.dp).padding(vertical = 12.dp),
             )
+            } else {
+                HiddenOwnerStage(accent)
+            }
             ViewLedger(world, accent, protectedSeconds)
             Spacer(Modifier.height(12.dp))
             AuctionCard(
@@ -537,6 +542,20 @@ private fun LiveScreen(
             Spacer(Modifier.height(14.dp))
             CrowdControls(world, onReact, onEcho)
         }
+    }
+}
+
+@Composable
+private fun HiddenOwnerStage(accent: Color) {
+    Column(
+        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 18.dp)
+            .clip(RoundedCornerShape(7.dp)).background(InkRaised)
+            .border(1.dp, accent.copy(alpha = .42f), RoundedCornerShape(7.dp)).padding(22.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("CONTENT HIDDEN", color = accent, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
+        Text("YOU'VE HIDDEN\nTHIS OWNER.", color = Paper, fontFamily = display, fontWeight = FontWeight.Black, fontSize = 34.sp, lineHeight = 32.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 13.dp))
+        Text("Their message is live for everyone else. The game continues — you can still take the screen.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
     }
 }
 
@@ -1300,7 +1319,8 @@ private fun HandleOverlay(
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val currentAlias = world.currentUser?.handle ?: "@PLAYER"
-    var country by rememberSaveable { mutableStateOf(world.currentUser?.countryCode?.takeIf { it in java.util.Locale.getISOCountries() } ?: suggestedCountry()) }
+    val handleContext = LocalContext.current
+    var country by rememberSaveable { mutableStateOf(world.currentUser?.countryCode?.takeIf { it in java.util.Locale.getISOCountries() } ?: suggestedCountry(handleContext)) }
     val candidate = AuctionRules.normalizeHandle(ui.handleText)
     val valid = ui.handleText.isNotBlank() && AuctionRules.validateHandle(candidate) == null
     val remaining = AuctionRules.HANDLE_MAX - candidate.length
@@ -2295,38 +2315,43 @@ private fun ErrorStrip(text: String) {
 @Composable
 private fun RevengeBanner(world: WorldState, onOpen: () -> Unit, onDismiss: () -> Unit) {
     val owner = world.reign.owner
+    Box(Modifier.fillMaxSize().background(Orange)) {
+        // Printed-notice texture: dramatic without a costly animation or bitmap.
+        CertificateField(Modifier.fillMaxSize())
     Column(
         Modifier
             .fillMaxSize()
-            .background(Orange)
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(horizontal = 22.dp, vertical = 16.dp),
+            .padding(horizontal = 17.dp, vertical = 13.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("♛  DETHRONED", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
             CircleActionDark("×", onDismiss)
         }
 
-        Spacer(Modifier.height(30.dp))
+        Spacer(Modifier.height(20.dp))
         Text(
             "THEY\nTOOK\nONE.",
             color = Ink,
             fontWeight = FontWeight.Black,
-            fontSize = 60.sp,
-            lineHeight = 51.sp,
-            letterSpacing = (-3).sp,
+            fontFamily = display,
+            fontSize = 67.sp,
+            lineHeight = 57.sp,
+            letterSpacing = (-2.8).sp,
         )
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(18.dp))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Ink.copy(alpha = .62f)))
+        Spacer(Modifier.height(13.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ProfilePhoto(owner, Ink, Modifier.size(44.dp))
-            Spacer(Modifier.width(12.dp))
+            ProfilePhoto(owner, Acid, Modifier.size(50.dp))
+            Spacer(Modifier.width(11.dp))
             Column {
-                Text(owner.handle, color = Ink, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                Text(owner.handle, color = Ink, fontFamily = display, fontWeight = FontWeight.Black, fontSize = 23.sp)
                 Text("TOOK THE SCREEN.", color = Ink.copy(alpha = .68f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         Text(
             "♛  ${owner.handle} IS NOW THE OWNER.",
             color = Ink,
@@ -2335,42 +2360,48 @@ private fun RevengeBanner(world: WorldState, onOpen: () -> Unit, onDismiss: () -
             fontSize = 12.sp,
             letterSpacing = .6.sp,
         )
-        Spacer(Modifier.height(18.dp))
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Ink.copy(alpha = .18f)))
-
         Spacer(Modifier.weight(1f))
+        Text(
+            "YOUR PREVIOUS REIGN",
+            color = Paper.copy(alpha = .74f),
+            fontFamily = mono,
+            fontSize = 10.sp,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+        )
         Row(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color.Black.copy(alpha = .28f))
-                .border(1.dp, Ink.copy(alpha = .22f), RoundedCornerShape(8.dp))
-                .padding(vertical = 15.dp),
+                .clip(RoundedCornerShape(7.dp))
+                .background(Ink)
+                .border(1.dp, Ink.copy(alpha = .72f), RoundedCornerShape(7.dp))
+                .padding(vertical = 12.dp),
         ) {
             ProfileStat("⬡", world.userLongestReign?.let { formatDuration(it.toLong()) } ?: "—", "LONGEST REIGN", Modifier.weight(1f))
-            Box(Modifier.width(1.dp).height(48.dp).background(Ink.copy(alpha = .2f)))
+            Box(Modifier.width(1.dp).height(48.dp).background(Paper.copy(alpha = .2f)))
             ProfileStat("ϟ", world.userTakeovers?.toString() ?: "—", "TAKEOVERS", Modifier.weight(1f))
-            Box(Modifier.width(1.dp).height(48.dp).background(Ink.copy(alpha = .2f)))
+            Box(Modifier.width(1.dp).height(48.dp).background(Paper.copy(alpha = .2f)))
             ProfileStat("◉", world.userVerifiedViews?.let(::formatNumber) ?: "—", "VERIFIED VIEWS", Modifier.weight(1f))
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(11.dp))
         Button(
             onClick = onOpen,
             colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink),
-            shape = RoundedCornerShape(6.dp),
-            modifier = Modifier.fillMaxWidth().height(62.dp),
+            shape = RoundedCornerShape(5.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp),
         ) {
             Text("⚡  TAKE IT BACK", fontWeight = FontWeight.Black, fontSize = 14.sp)
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
         Button(
             onClick = onDismiss,
             colors = ButtonDefaults.buttonColors(containerColor = Ink, contentColor = Paper),
-            shape = RoundedCornerShape(6.dp),
-            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(5.dp),
+            modifier = Modifier.fillMaxWidth().height(51.dp),
         ) {
             Text("◉  WATCH LIVE", fontWeight = FontWeight.Black, fontSize = 13.sp)
         }
+    }
     }
 }
 

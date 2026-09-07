@@ -175,7 +175,12 @@ class CloudOneRepository(context: Context) : OneRepository {
     override fun reportCurrentMessage(reason: String) {
         scope.launch {
             runCatching { rpc("report_one", JSONObject().put("p_reason", reason), authenticated = true) }
-                .onSuccess { _events.emit(OneEvent.Error("Report received. Thank you for protecting ONE.")) }
+                .onSuccess {
+                    // The report itself is the confirmation. Refresh immediately so
+                    // this user's live screen is masked without another action.
+                    refreshWorld()
+                    _events.emit(OneEvent.Error("Reported. Hidden for you."))
+                }
                 .onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
         }
     }
@@ -368,6 +373,17 @@ class CloudOneRepository(context: Context) : OneRepository {
         cachedHallAllTime = emptyList()
         hallRefreshAt = 0L
         refreshWorld()
+    }
+
+    override suspend fun isGoogleIdentityLinked(): Boolean = withContext(Dispatchers.IO) {
+        val token = ensureSession().accessToken
+        val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/user", "GET", token)
+        val payload = connection.readJson()
+        if (connection.responseCode !in 200..299) return@withContext false
+        val identities = payload.optJSONArray("identities") ?: return@withContext false
+        (0 until identities.length()).any { index ->
+            identities.optJSONObject(index)?.optString("provider") == "google"
+        }
     }
 
     private suspend fun ensureSession(): AuthSession = authMutex.withLock {
@@ -599,6 +615,9 @@ class CloudOneRepository(context: Context) : OneRepository {
             message?.contains("HANDLE_MUST_BE_3_TO_18_CHARACTERS") == true -> "Use 3 to 18 characters."
             message?.contains("CANNOT_BLOCK_YOURSELF") == true -> "You cannot block your own live reign."
             message?.contains("CANNOT_BLOCK_ONE") == true -> "The system screen cannot be blocked."
+            message?.contains("ACCOUNT_SUSPENDED") == true -> "Taking ONE is temporarily unavailable for this account."
+            message?.contains("REPORT_RATE_LIMIT") == true -> "You have sent a lot of reports recently. Please try again later."
+            message?.contains("CANNOT_REPORT_YOURSELF") == true -> "You cannot report your own live message."
             else -> message ?: "ONE request failed."
         }
         else -> "Cannot reach ONE. Check your connection and backend configuration."
