@@ -5,6 +5,21 @@
 alter table public.reports add column if not exists message_id uuid references public.messages(id);
 alter table public.reports add column if not exists resolved_at timestamptz;
 alter table public.reports add column if not exists resolution text check (resolution in ('removed', 'dismissed', 'suspended', 'banned'));
+
+-- Earlier builds allowed repeat reports. Keep the original report and remove
+-- only later duplicates before making one report per person/reign enforceable.
+delete from public.reports as duplicate
+using (
+    select ctid,
+           row_number() over (
+               partition by reporter_id, reign_id
+               order by created_at asc nulls last, ctid
+           ) as duplicate_number
+    from public.reports
+) as ranked
+where duplicate.ctid = ranked.ctid
+  and ranked.duplicate_number > 1;
+
 create unique index if not exists reports_one_per_reign_reporter
     on public.reports(reporter_id, reign_id);
 create index if not exists reports_open_reign_idx on public.reports(reign_id, created_at desc) where status = 'open';
