@@ -32,10 +32,12 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     }
     val world = repository.world
     private val profilePreferences = application.getSharedPreferences("one_profile_ui", Context.MODE_PRIVATE)
+    private val howToPlayOnLaunch = profilePreferences.getBoolean("how_to_play_on_launch", false)
 
     private val _ui = MutableStateFlow(
         OneUiState(
-            onboardingComplete = profilePreferences.getBoolean("onboarding_complete", false),
+            onboardingComplete = !howToPlayOnLaunch && profilePreferences.getBoolean("onboarding_complete", false),
+            howToPlayOnLaunch = howToPlayOnLaunch,
         ),
     )
     val ui: StateFlow<OneUiState> = _ui.asStateFlow()
@@ -181,6 +183,11 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     fun completeOnboarding() {
         profilePreferences.edit().putBoolean("onboarding_complete", true).apply()
         _ui.update { it.copy(onboardingComplete = true) }
+    }
+
+    fun setHowToPlayOnLaunch(enabled: Boolean) {
+        profilePreferences.edit().putBoolean("how_to_play_on_launch", enabled).apply()
+        _ui.update { it.copy(howToPlayOnLaunch = enabled) }
     }
 
     fun openChallenge() {
@@ -471,7 +478,7 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openFeedback() {
-        _ui.update { it.copy(overlay = Overlay.FEEDBACK, feedbackText = "", feedbackCategory = "GENERAL", feedbackSending = false) }
+        _ui.update { it.copy(overlay = Overlay.FEEDBACK, feedbackText = "", feedbackCategory = "OTHER", feedbackSending = false) }
     }
 
     fun updateFeedbackText(text: String) {

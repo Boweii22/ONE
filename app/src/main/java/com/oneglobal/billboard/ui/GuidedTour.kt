@@ -1,6 +1,5 @@
 package com.oneglobal.billboard.ui
 
-import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -14,7 +13,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
@@ -28,13 +26,11 @@ private data class TourStep(val target: String, val tab: MainTab, val title: Str
 @Composable
 fun GuidedTourHost(
     currentTab: MainTab,
+    startOnLaunch: Boolean,
     onSelectTab: (MainTab) -> Unit,
     content: @Composable (() -> Unit) -> Unit,
 ) {
-    val prefs = LocalContext.current.getSharedPreferences("one_tour", Context.MODE_PRIVATE)
-    val onboardingPrefs = LocalContext.current.getSharedPreferences("one_profile_ui", Context.MODE_PRIVATE)
-    var enabled by remember { mutableStateOf(prefs.getBoolean("enabled", true)) }
-    var showing by remember { mutableStateOf(enabled && !prefs.getBoolean("seen", false)) }
+    var showing by remember { mutableStateOf(startOnLaunch) }
     var step by remember { mutableIntStateOf(0) }
     val targets = remember { mutableStateMapOf<String, Rect>() }
     val steps = listOf(
@@ -46,7 +42,7 @@ fun GuidedTourHost(
         TourStep("YOU", MainTab.YOU, "Make it yours.", "Set your photo and optional country. Protect your handle with Google. Replay this guide anytime from How to Play."),
         TourStep("WALLET", MainTab.YOU, "Your ONE Vault.", "This is your ONE Credits balance. Spend one credit to skip your cooldown, or tap + to get more."),
     )
-    fun finish() { showing = false; prefs.edit().putBoolean("seen", true).apply() }
+    fun finish() { showing = false }
     LaunchedEffect(showing, step) {
         if (showing && currentTab != steps[step].tab) onSelectTab(steps[step].tab)
     }
@@ -73,17 +69,6 @@ fun GuidedTourHost(
                     Spacer(Modifier.height(12.dp))
                     Text(item.title, color = Paper, fontSize = 25.sp, fontWeight = FontWeight.Black)
                     Text(item.body, color = Paper, fontSize = 16.sp, lineHeight = 23.sp, modifier = Modifier.padding(top = 12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Show first-time tips", color = Muted, modifier = Modifier.weight(1f), fontSize = 14.sp)
-                        Switch(checked = enabled, onCheckedChange = { checked ->
-                            enabled = checked
-                            // The toggle governs both this tour and the first-run onboarding screens together:
-                            // while on, both replay from the next app open; turning it off skips both for good.
-                            prefs.edit().putBoolean("enabled", checked).putBoolean("seen", !checked).apply()
-                            onboardingPrefs.edit().putBoolean("onboarding_complete", !checked).apply()
-                            if (!checked) finish()
-                        })
-                    }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         TextButton(onClick = { finish() }) { Text("Skip", color = Paper) }
                         Button(onClick = { if (step == steps.lastIndex) finish() else step++ }, colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink)) { Text(if (step == steps.lastIndex) "Let's play" else "Next →") }

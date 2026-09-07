@@ -169,42 +169,57 @@ class MainActivity : ComponentActivity() {
             result(false, "Purchases are not configured in this build yet.", 0)
             return
         }
-        Purchases.sharedInstance.getOfferings(object : ReceiveOfferingsCallback {
-            override fun onReceived(offerings: com.revenuecat.purchases.Offerings) {
-                // "tickets" and one_tickets_* are legacy dashboard identifiers.
-                // Keep them as fallbacks because store product IDs cannot be renamed.
-                val creditOffering = offerings.all["credits"] ?: offerings.all["tickets"] ?: offerings.current
-                val productIds = when {
-                    requestedAmount >= 50 -> setOf("one_credits_headliner_v1", "one_tickets_headliner_v1")
-                    requestedAmount >= 20 -> setOf("one_credits_challenger_v1", "one_tickets_challenger_v1")
-                    else -> setOf("one_credits_spark_v1", "one_tickets_spark_v1")
-                }
-                val packageToBuy = creditOffering?.availablePackages
-                    ?.firstOrNull { it.product.id in productIds }
-                if (packageToBuy == null) {
-                    result(false, "This ONE Credit pack is not available right now.", 0)
-                    return
-                }
-                Purchases.sharedInstance.purchase(
-                    PurchaseParams.Builder(this@MainActivity, packageToBuy).build(),
-                    object : PurchaseCallback {
-                        override fun onCompleted(
-                            storeTransaction: StoreTransaction,
-                            customerInfo: CustomerInfo,
-                        ) {
-                            Purchases.sharedInstance.invalidateVirtualCurrenciesCache()
-                            result(true, "$requestedAmount ONE Credits are being verified.", requestedAmount)
-                        }
+        val userId = viewModel.world.value.currentUserId
+        if (userId.isBlank()) {
+            result(false, "Your ONE identity is still loading. Try again in a moment.", 0)
+            return
+        }
 
-                        override fun onError(error: PurchasesError, userCancelled: Boolean) {
-                            result(false, if (userCancelled) "Purchase cancelled." else error.message, 0)
-                        }
-                    },
-                )
+        fun loadOfferingAndPurchase() {
+            Purchases.sharedInstance.getOfferings(object : ReceiveOfferingsCallback {
+                override fun onReceived(offerings: com.revenuecat.purchases.Offerings) {
+                    // Store product IDs are permanent, so support both the current and legacy aliases.
+                    val creditOffering = offerings.all["credits"] ?: offerings.all["tickets"] ?: offerings.current
+                    val productIds = when {
+                        requestedAmount >= 50 -> setOf("one_credits_headliner_v1", "one_tickets_headliner_v1")
+                        requestedAmount >= 20 -> setOf("one_credits_challenger_v1", "one_tickets_challenger_v1")
+                        else -> setOf("one_credits_spark_v1", "one_tickets_spark_v1")
+                    }
+                    val packageToBuy = creditOffering?.availablePackages?.firstOrNull { it.product.id in productIds }
+                    if (packageToBuy == null) {
+                        result(false, "This ONE Credit pack is not available right now.", 0)
+                        return
+                    }
+                    Purchases.sharedInstance.purchase(
+                        PurchaseParams.Builder(this@MainActivity, packageToBuy).build(),
+                        object : PurchaseCallback {
+                            override fun onCompleted(storeTransaction: StoreTransaction, customerInfo: CustomerInfo) {
+                                Purchases.sharedInstance.invalidateVirtualCurrenciesCache()
+                                result(true, "Purchase complete. Syncing your ONE Credits...", requestedAmount)
+                            }
+
+                            override fun onError(error: PurchasesError, userCancelled: Boolean) {
+                                result(false, if (userCancelled) "Purchase cancelled." else error.message, 0)
+                            }
+                        },
+                    )
+                }
+
+                override fun onError(error: PurchasesError) = result(false, error.message, 0)
+            })
+        }
+
+        // A purchase made under RevenueCat's temporary anonymous ID cannot be credited
+        // to the Supabase profile. Complete identification before opening Play Billing.
+        Purchases.sharedInstance.logIn(userId, object : LogInCallback {
+            override fun onReceived(customerInfo: CustomerInfo, created: Boolean) {
+                identifiedUserId = userId
+                loadOfferingAndPurchase()
             }
 
             override fun onError(error: PurchasesError) {
-                result(false, error.message, 0)
+                identifiedUserId = null
+                result(false, "Could not connect this purchase to your ONE account: ${error.message}", 0)
             }
         })
     }

@@ -115,7 +115,7 @@ class DemoOneRepository : OneRepository {
             appViews = 12_482,
             webViews = 31_905,
             liveWatchers = 2_184,
-            credits = 3,
+            credits = 1,
             userDailyReignSeconds = 86,
             userRetakesToday = 0,
             dailyCapSeconds = AuctionRules.DAILY_REIGN_CAP_SECONDS,
@@ -356,7 +356,7 @@ class DemoOneRepository : OneRepository {
             current.copy(
                 currentUserId = "user_fresh",
                 currentUser = OneOwner("user_fresh", "@PLAYER_FRESH", "EARTH", "XX", false, "PL"),
-                credits = 3,
+                credits = 1,
                 messages = emptyList(),
                 blockedCount = 0,
                 currentContentBlocked = false,

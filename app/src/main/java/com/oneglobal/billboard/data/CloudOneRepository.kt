@@ -166,9 +166,23 @@ class CloudOneRepository(context: Context) : OneRepository {
 
     override fun grantPurchasedCredits(amount: Int) {
         scope.launch {
-            delay(700)
-            runCatching { refreshWorld() }
-            _events.emit(OneEvent.Error("Purchase received. The server is verifying your ONE Credits."))
+            val balanceBefore = _world.value.credits
+            if (amount <= 0) {
+                runCatching { refreshWorld() }
+                    .onSuccess { _events.emit(OneEvent.Error("Purchases restored. Your ONE Credit balance is up to date.")) }
+                    .onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
+                return@launch
+            }
+            repeat(20) { attempt ->
+                delay(if (attempt == 0) 800 else 1_500)
+                val refreshed = runCatching { refreshWorld() }.isSuccess
+                val granted = _world.value.credits - balanceBefore
+                if (refreshed && granted > 0) {
+                    _events.emit(OneEvent.CreditsGranted(granted, "PURCHASE VERIFIED"))
+                    return@launch
+                }
+            }
+            _events.emit(OneEvent.Error("Payment completed, but the credit webhook has not arrived yet. Tap Restore purchases or reopen ONE shortly."))
         }
     }
 

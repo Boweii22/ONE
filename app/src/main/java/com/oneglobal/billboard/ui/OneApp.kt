@@ -63,7 +63,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,6 +82,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -196,7 +199,7 @@ fun OneApp(
         return
     }
 
-    GuidedTourHost(currentTab = ui.tab, onSelectTab = viewModel::selectTab) { startTour ->
+    GuidedTourHost(currentTab = ui.tab, startOnLaunch = ui.howToPlayOnLaunch, onSelectTab = viewModel::selectTab) { startTour ->
     Box(Modifier.fillMaxSize().background(Ink)) {
         AnimatedContent(
             targetState = ui.tab,
@@ -245,7 +248,7 @@ fun OneApp(
                     onFeedback = viewModel::openFeedback,
                     onUnblockAll = viewModel::unblockAll,
                     onDeleteAccount = viewModel::openDeleteAccount,
-                    onHowItWorks = startTour,
+                    onHowItWorks = viewModel::openHowItWorks,
                     onEditProfile = viewModel::openProfile,
                 )
             }
@@ -322,14 +325,15 @@ fun OneApp(
                     onClose = viewModel::closeOverlay,
                     onPurchase = { amount ->
                         onPurchaseCredits(amount) { success, message, granted ->
+                            viewModel.showToast(message)
                             if (success && granted > 0) viewModel.grantPurchasedCredits(granted)
-                            if (!success) {
-                                // The monetisation shell intentionally remains safe in demo mode.
-                            }
                         }
                     },
                     onRestore = {
-                        onRestorePurchases { _, message -> viewModel.showToast(message) }
+                        onRestorePurchases { success, message ->
+                            viewModel.showToast(message)
+                            if (success) viewModel.grantPurchasedCredits(0)
+                        }
                     },
                 )
                 Overlay.REPORT -> ReportOverlay(
@@ -354,7 +358,15 @@ fun OneApp(
                     onDelete = viewModel::deleteAccount,
                     onHelp = onOpenDeletionHelp,
                 )
-                Overlay.HOW_IT_WORKS -> HowItWorksOverlay(onClose = viewModel::closeOverlay)
+                Overlay.HOW_IT_WORKS -> HowItWorksOverlay(
+                    enabledOnLaunch = ui.howToPlayOnLaunch,
+                    onEnabledChanged = viewModel::setHowToPlayOnLaunch,
+                    onStartNow = {
+                        viewModel.closeOverlay()
+                        startTour()
+                    },
+                    onClose = viewModel::closeOverlay,
+                )
             }
         }
 
@@ -1221,7 +1233,12 @@ private fun ChallengeChoice(
 }
 
 @Composable
-private fun HowItWorksOverlay(onClose: () -> Unit) {
+private fun HowItWorksOverlay(
+    enabledOnLaunch: Boolean,
+    onEnabledChanged: (Boolean) -> Unit,
+    onStartNow: () -> Unit,
+    onClose: () -> Unit,
+) {
     Box(Modifier.fillMaxSize().background(Ink)) {
         LiveField(Acid, Modifier.fillMaxSize())
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp)) {
@@ -1234,6 +1251,22 @@ private fun HowItWorksOverlay(onClose: () -> Unit) {
             RuleCard("02", "ϟ", "TAKE", "Choose an approved message and hold to challenge. The server decides the winner atomically.", Orange)
             Spacer(Modifier.height(10.dp))
             RuleCard("03", "♛", "DEFEND", "Your reign lasts until somebody takes it. Every second and verified view enters The Hall.", Ice)
+            Spacer(Modifier.height(18.dp))
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(InkRaised)
+                    .border(1.dp, Acid.copy(alpha = .42f), RoundedCornerShape(7.dp)).padding(18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("START WITH THE GUIDE", color = Paper, fontWeight = FontWeight.Black, fontSize = 16.sp)
+                    Text("When this is on, every new app launch begins with onboarding and the spotlight walkthrough.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 5.dp))
+                }
+                Switch(checked = enabledOnLaunch, onCheckedChange = onEnabledChanged)
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(onClick = onStartNow, modifier = Modifier.fillMaxWidth().height(52.dp), border = BorderStroke(1.dp, Acid)) {
+                Text("PLAY THE GUIDE NOW", color = Acid, fontWeight = FontWeight.Black)
+            }
             Spacer(Modifier.height(18.dp))
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(Acid).padding(18.dp)) {
                 Text("NO FAKE NUMBERS.", color = Ink, fontWeight = FontWeight.Black, fontSize = 20.sp)
@@ -2315,93 +2348,102 @@ private fun ErrorStrip(text: String) {
 @Composable
 private fun RevengeBanner(world: WorldState, onOpen: () -> Unit, onDismiss: () -> Unit) {
     val owner = world.reign.owner
-    Box(Modifier.fillMaxSize().background(Orange)) {
-        // Printed-notice texture: dramatic without a costly animation or bitmap.
-        CertificateField(Modifier.fillMaxSize())
-    Column(
-        Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 17.dp, vertical = 13.dp),
-    ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("♛  DETHRONED", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
-            CircleActionDark("×", onDismiss)
-        }
+    BoxWithConstraints(Modifier.fillMaxSize().background(Orange)) {
+        DethronedTexture(Modifier.fillMaxSize())
+        val compact = maxHeight < 720.dp
+        val headlineSize = if (compact) 61.sp else 72.sp
+        val headlineLine = if (compact) 57.sp else 67.sp
+        Column(
+            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                .padding(horizontal = 18.dp, vertical = if (compact) 10.dp else 14.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CrownMark(Modifier.size(if (compact) 21.dp else 25.dp))
+                    Spacer(Modifier.width(9.dp))
+                    Text("DETHRONED", color = Ink, fontFamily = display, fontSize = if (compact) 14.sp else 16.sp, letterSpacing = .2.sp)
+                }
+                CircleActionDark("!", onOpen)
+            }
 
-        Spacer(Modifier.height(20.dp))
-        Text(
-            "THEY\nTOOK\nONE.",
-            color = Ink,
-            fontWeight = FontWeight.Black,
-            fontFamily = display,
-            fontSize = 67.sp,
-            lineHeight = 57.sp,
-            letterSpacing = (-2.8).sp,
-        )
-        Spacer(Modifier.height(18.dp))
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Ink.copy(alpha = .62f)))
-        Spacer(Modifier.height(13.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ProfilePhoto(owner, Acid, Modifier.size(50.dp))
-            Spacer(Modifier.width(11.dp))
-            Column {
-                Text(owner.handle, color = Ink, fontFamily = display, fontWeight = FontWeight.Black, fontSize = 23.sp)
-                Text("TOOK THE SCREEN.", color = Ink.copy(alpha = .68f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            Spacer(Modifier.height(if (compact) 14.dp else 18.dp))
+            Text("THEY", color = Ink, fontFamily = display, fontSize = headlineSize, lineHeight = headlineLine, letterSpacing = (-2.4).sp)
+            Text("TOOK", color = Ink, fontFamily = display, fontSize = headlineSize, lineHeight = headlineLine, letterSpacing = (-2.4).sp)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("ONE", color = Paper, fontFamily = display, fontSize = headlineSize, lineHeight = headlineLine, letterSpacing = (-2.4).sp)
+                Text(".", color = Acid, fontFamily = display, fontSize = headlineSize, lineHeight = headlineLine)
+            }
+
+            Spacer(Modifier.height(if (compact) 10.dp else 14.dp))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Ink.copy(alpha = .7f)))
+            Spacer(Modifier.height(if (compact) 10.dp else 14.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ProfilePhoto(owner, Acid, Modifier.size(if (compact) 54.dp else 62.dp))
+                Spacer(Modifier.width(13.dp))
+                Column {
+                    Text(owner.handle, color = Ink, fontFamily = display, fontSize = if (compact) 24.sp else 28.sp, maxLines = 1)
+                    Text("TOOK THE SCREEN.", color = Ink.copy(alpha = .72f), fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("♛  ${owner.handle} IS NOW THE OWNER.", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = .45.sp)
+
+            Spacer(Modifier.weight(1f))
+            Text("YOUR PREVIOUS REIGN", color = Ink.copy(alpha = .72f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 10.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            Spacer(Modifier.height(4.dp))
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(Ink)
+                    .border(1.dp, Paper.copy(alpha = .14f), RoundedCornerShape(6.dp))
+                    .padding(vertical = if (compact) 10.dp else 13.dp),
+            ) {
+                ProfileStat("⬡", world.userLongestReign?.let { formatDuration(it.toLong()) } ?: "—", "LONGEST REIGN", Modifier.weight(1f))
+                Box(Modifier.width(1.dp).height(50.dp).background(Paper.copy(alpha = .2f)))
+                ProfileStat("ϟ", world.userTakeovers?.toString() ?: "—", "TAKEOVERS", Modifier.weight(1f))
+                Box(Modifier.width(1.dp).height(50.dp).background(Paper.copy(alpha = .2f)))
+                ProfileStat("◉", world.userVerifiedViews?.let(::formatNumber) ?: "—", "VERIFIED VIEWS", Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(10.dp))
+            Button(onClick = onOpen, colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink), shape = RoundedCornerShape(5.dp), modifier = Modifier.fillMaxWidth().height(if (compact) 54.dp else 58.dp)) {
+                Text("ϟ  TAKE IT BACK", fontFamily = display, fontSize = 19.sp, letterSpacing = .3.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = Ink, contentColor = Paper), shape = RoundedCornerShape(5.dp), modifier = Modifier.fillMaxWidth().height(if (compact) 50.dp else 54.dp)) {
+                Text("◉  WATCH LIVE", fontWeight = FontWeight.Black, fontSize = 13.sp)
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "♛  ${owner.handle} IS NOW THE OWNER.",
-            color = Ink,
-            fontFamily = mono,
-            fontWeight = FontWeight.Black,
-            fontSize = 12.sp,
-            letterSpacing = .6.sp,
-        )
-        Spacer(Modifier.weight(1f))
-        Text(
-            "YOUR PREVIOUS REIGN",
-            color = Paper.copy(alpha = .74f),
-            fontFamily = mono,
-            fontSize = 10.sp,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
-        )
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(7.dp))
-                .background(Ink)
-                .border(1.dp, Ink.copy(alpha = .72f), RoundedCornerShape(7.dp))
-                .padding(vertical = 12.dp),
-        ) {
-            ProfileStat("⬡", world.userLongestReign?.let { formatDuration(it.toLong()) } ?: "—", "LONGEST REIGN", Modifier.weight(1f))
-            Box(Modifier.width(1.dp).height(48.dp).background(Paper.copy(alpha = .2f)))
-            ProfileStat("ϟ", world.userTakeovers?.toString() ?: "—", "TAKEOVERS", Modifier.weight(1f))
-            Box(Modifier.width(1.dp).height(48.dp).background(Paper.copy(alpha = .2f)))
-            ProfileStat("◉", world.userVerifiedViews?.let(::formatNumber) ?: "—", "VERIFIED VIEWS", Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(11.dp))
-        Button(
-            onClick = onOpen,
-            colors = ButtonDefaults.buttonColors(containerColor = Acid, contentColor = Ink),
-            shape = RoundedCornerShape(5.dp),
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-        ) {
-            Text("⚡  TAKE IT BACK", fontWeight = FontWeight.Black, fontSize = 14.sp)
-        }
-        Spacer(Modifier.height(8.dp))
-        Button(
-            onClick = onDismiss,
-            colors = ButtonDefaults.buttonColors(containerColor = Ink, contentColor = Paper),
-            shape = RoundedCornerShape(5.dp),
-            modifier = Modifier.fillMaxWidth().height(51.dp),
-        ) {
-            Text("◉  WATCH LIVE", fontWeight = FontWeight.Black, fontSize = 13.sp)
-        }
     }
+}
+
+@Composable
+private fun CrownMark(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val crown = Path().apply {
+            moveTo(size.width * .08f, size.height * .28f)
+            lineTo(size.width * .3f, size.height * .53f)
+            lineTo(size.width * .5f, size.height * .17f)
+            lineTo(size.width * .7f, size.height * .53f)
+            lineTo(size.width * .92f, size.height * .28f)
+            lineTo(size.width * .82f, size.height * .82f)
+            lineTo(size.width * .18f, size.height * .82f)
+            close()
+        }
+        drawPath(crown, Ink)
+        drawRect(Ink, topLeft = Offset(size.width * .16f, size.height * .86f), size = Size(size.width * .68f, size.height * .1f))
+    }
+}
+
+@Composable
+private fun DethronedTexture(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        repeat(90) { index ->
+            val x = ((index * 83) % 101) / 101f * size.width
+            val y = ((index * 47) % 97) / 97f * size.height
+            drawCircle(Ink.copy(alpha = .045f), radius = (1 + index % 3).dp.toPx(), center = Offset(x, y))
+        }
+        repeat(8) { index ->
+            val y = size.height * (.08f + index * .13f)
+            drawLine(Paper.copy(alpha = .025f), Offset(0f, y), Offset(size.width, y + 13.dp.toPx()), 1.dp.toPx())
+        }
     }
 }
 

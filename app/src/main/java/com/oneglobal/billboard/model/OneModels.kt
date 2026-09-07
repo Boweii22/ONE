@@ -176,7 +176,7 @@ data class OneUiState(
     val pushRegistered: Boolean = false,
     val takeoverPulse: Int = 0,
     val accountDeleting: Boolean = false,
-    val feedbackCategory: String = "GENERAL",
+    val feedbackCategory: String = "OTHER",
     val feedbackText: String = "",
     val feedbackSending: Boolean = false,
     val recoveryCode: String? = null,
@@ -186,6 +186,7 @@ data class OneUiState(
     val identityLinked: Boolean = false,
     val identityError: String? = null,
     val profileBusy: Boolean = false,
+    val howToPlayOnLaunch: Boolean = false,
 )
 
 sealed interface OneEvent {
