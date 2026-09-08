@@ -31,6 +31,8 @@ interface OneRepository {
     suspend fun updateProfile(city: String, countryCode: String)
     suspend fun updatePhoto(jpeg: ByteArray?)
     suspend fun googleIdentity(idToken: String, nonce: String, restore: Boolean)
+    suspend fun googleOAuthUrl(restore: Boolean): String
+    suspend fun completeGoogleOAuth(accessToken: String, refreshToken: String)
     suspend fun isGoogleIdentityLinked(): Boolean
     fun start()
     fun stop()

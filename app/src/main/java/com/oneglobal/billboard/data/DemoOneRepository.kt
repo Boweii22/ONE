@@ -405,6 +405,13 @@ class DemoOneRepository : OneRepository {
         error("Google identity requires a connected account.")
     }
 
+    override suspend fun googleOAuthUrl(restore: Boolean): String =
+        error("Google identity requires a connected account.")
+
+    override suspend fun completeGoogleOAuth(accessToken: String, refreshToken: String) {
+        error("Google identity requires a connected account.")
+    }
+
     override suspend fun isGoogleIdentityLinked(): Boolean = false
 
     override suspend fun updatePhoto(jpeg: ByteArray?) {

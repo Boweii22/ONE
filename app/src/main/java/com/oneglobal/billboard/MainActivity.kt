@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleGoogleAuthLink(intent)
         handleChallengeLink(intent)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
@@ -68,7 +69,26 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        handleGoogleAuthLink(intent)
         handleChallengeLink(intent)
+    }
+
+    private fun handleGoogleAuthLink(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme != "one" || uri.host != "auth" || uri.path != "/callback") return
+        val params = Uri.parse("one://callback?${uri.fragment.orEmpty()}")
+        val error = params.getQueryParameter("error_description") ?: params.getQueryParameter("error")
+        if (!error.isNullOrBlank()) {
+            viewModel.identityStatus("Google sign-in failed: $error. Your handle is unchanged.")
+            return
+        }
+        val access = params.getQueryParameter("access_token")
+        val refresh = params.getQueryParameter("refresh_token")
+        if (access.isNullOrBlank() || refresh.isNullOrBlank()) {
+            viewModel.identityStatus("Google returned no session. Your handle is unchanged.")
+            return
+        }
+        viewModel.completeGoogleBrowserIdentity(access, refresh)
     }
 
     private fun handleChallengeLink(intent: Intent?) {
@@ -265,29 +285,7 @@ class MainActivity : ComponentActivity() {
             viewModel.showToast("Google sign-in is not configured in this build yet.")
             return
         }
-        lifecycleScope.launch {
-            val nonce = java.util.UUID.randomUUID().toString()
-            viewModel.beginGoogleIdentity()
-            val digest = java.security.MessageDigest.getInstance("SHA-256")
-                .digest(nonce.toByteArray()).joinToString("") { "%02x".format(it) }
-            try {
-                val option = com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
-                    .Builder(BuildConfig.GOOGLE_WEB_CLIENT_ID).setNonce(digest).build()
-                val request = androidx.credentials.GetCredentialRequest.Builder().addCredentialOption(option).build()
-                val result = androidx.credentials.CredentialManager.create(this@MainActivity)
-                    .getCredential(this@MainActivity, request)
-                val token = com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-                    .createFrom(result.credential.data).idToken
-                viewModel.googleIdentity(token, nonce, restore)
-            } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
-                viewModel.identityStatus("Google sign-in cancelled. You can try again whenever you're ready.")
-            } catch (e: Exception) {
-                // Keep the handle safe, but expose the provider's useful reason so
-                // a Play build with a missing SHA/client configuration is diagnosable.
-                val detail = e.message?.takeIf { it.isNotBlank() }?.take(180) ?: e.javaClass.simpleName
-                viewModel.identityStatus("Google could not finish sign-in: $detail. Your handle is unchanged.")
-            }
-        }
+        viewModel.startGoogleBrowserIdentity(restore) { url -> openUrl(url) }
     }
 
     private fun shareONE() {

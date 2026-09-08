@@ -413,6 +413,36 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun startGoogleBrowserIdentity(restore: Boolean, open: (String) -> Unit) {
+        _ui.update { it.copy(identityBusy = true, identityError = "Opening secure Google sign-in…") }
+        viewModelScope.launch {
+            try {
+                open(repository.googleOAuthUrl(restore))
+                _ui.update { it.copy(identityError = "Finish with Google, then ONE will reopen automatically.") }
+            } catch (e: Exception) {
+                _ui.update { it.copy(identityError = e.message ?: "Could not open Google sign-in.") }
+            } finally {
+                _ui.update { it.copy(identityBusy = false) }
+            }
+        }
+    }
+
+    fun completeGoogleBrowserIdentity(accessToken: String, refreshToken: String) {
+        _ui.update { it.copy(identityBusy = true, identityError = "Securing your ONE identity…") }
+        viewModelScope.launch {
+            try {
+                repository.completeGoogleOAuth(accessToken, refreshToken)
+                val userId = world.value.currentUserId
+                profilePreferences.edit().putBoolean("google_linked_$userId", true).apply()
+                _ui.update { it.copy(overlay = Overlay.IDENTITY, identityLinked = true, identityError = null, toast = "Google connected. Your handle is protected.") }
+            } catch (e: Exception) {
+                _ui.update { it.copy(identityError = e.message ?: "Google linking could not be completed.") }
+            } finally {
+                _ui.update { it.copy(identityBusy = false) }
+            }
+        }
+    }
+
     fun openIdentityBackup() {
         val userId = world.value.currentUserId
         _ui.update {

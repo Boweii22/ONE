@@ -420,6 +420,51 @@ class CloudOneRepository(context: Context) : OneRepository {
         refreshWorld()
     }
 
+    override suspend fun googleOAuthUrl(restore: Boolean): String = withContext(Dispatchers.IO) {
+        val redirect = java.net.URLEncoder.encode("one://auth/callback", Charsets.UTF_8.name())
+        preferences.edit().putBoolean("pending_google_restore", restore).commit()
+        if (restore) {
+            return@withContext "${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/authorize?provider=google&redirect_to=$redirect"
+        }
+
+        val current = refreshSession()
+        val connection = open(
+            "${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/user/identities/authorize?provider=google&redirect_to=$redirect",
+            "GET",
+            current.accessToken,
+        )
+        val payload = connection.readJson()
+        if (connection.responseCode !in 200..299) {
+            val detail = payload.optString("msg", payload.optString("error_description", "Could not start Google linking."))
+            throw IllegalStateException(detail)
+        }
+        payload.optString("url").takeIf { it.startsWith("https://") }
+            ?: throw IllegalStateException("Google linking returned no secure URL.")
+    }
+
+    override suspend fun completeGoogleOAuth(accessToken: String, refreshToken: String) = withContext(Dispatchers.IO) {
+        val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/user", "GET", accessToken)
+        val user = connection.readJson()
+        if (connection.responseCode !in 200..299) throw IllegalStateException("Google returned an invalid session.")
+        val returnedId = user.optString("id")
+        val restoring = preferences.getBoolean("pending_google_restore", false)
+        val existingId = preferences.getString("user_id", null)
+        check(restoring || existingId.isNullOrBlank() || returnedId == existingId) {
+            "Google returned a different ONE account. Your current handle was kept."
+        }
+        persistSession(
+            JSONObject()
+                .put("access_token", accessToken)
+                .put("refresh_token", refreshToken)
+                .put("user", user),
+        )
+        preferences.edit().remove("pending_google_restore").commit()
+        cachedHallToday = emptyList()
+        cachedHallAllTime = emptyList()
+        hallRefreshAt = 0L
+        refreshWorld()
+    }
+
     override suspend fun isGoogleIdentityLinked(): Boolean = withContext(Dispatchers.IO) {
         val token = ensureSession().accessToken
         val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/user", "GET", token)

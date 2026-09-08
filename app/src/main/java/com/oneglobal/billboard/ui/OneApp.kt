@@ -50,6 +50,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -101,9 +102,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -440,7 +443,7 @@ private fun OnboardingScreen(onEnter: () -> Unit) {
                 drawCircle(item.color.copy(alpha = .035f), size.minDimension * (.18f + ring * .09f), Offset(size.width * .78f, size.height * .22f), style = Stroke(1f))
             }
         }
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 22.dp, vertical = 17.dp)) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 22.dp, vertical = 17.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("ONE / FIRST ENTRY", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
                 Text("${page + 1} / ${pages.size}", color = item.color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
@@ -507,8 +510,7 @@ private fun LiveScreen(
         Column(
             Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
+                .safeDrawingPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 100.dp),
         ) {
@@ -617,22 +619,40 @@ private fun LiveMapMessageStage(
     }
 }
 
+private val messageStageSizeSteps = listOf(76.sp, 68.sp, 62.sp, 56.sp, 50.sp, 44.sp, 38.sp, 34.sp, 30.sp, 26.sp)
+
 @Composable
 private fun MessageStage(message: String, accent: Color) {
-    val size = when {
-        message.length <= 32 -> 76.sp
-        message.length <= 55 -> 62.sp
-        message.length <= 90 -> 50.sp
-        else -> 42.sp
-    }
-    Column {
+    val upper = message.uppercase()
+    val words = remember(upper) { upper.split(Regex("\\s+")).filter { it.isNotEmpty() } }
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val maxWidthPx = with(density) { maxWidth.toPx() }
+        // Pick the largest size where no single word is wider than the screen -
+        // a length-only heuristic can't know that (device width, real glyph
+        // widths, hashtags/URLs with no spaces to wrap at), and picking too
+        // large a size forces an ugly mid-word character break instead of a
+        // clean wrap onto the next line.
+        val chosenSize = remember(words, maxWidthPx) {
+            messageStageSizeSteps.firstOrNull { candidate ->
+                if (maxWidthPx <= 0f || words.isEmpty()) return@firstOrNull true
+                val style = TextStyle(fontFamily = display, fontWeight = FontWeight.Black, fontSize = candidate, letterSpacing = (-.5).sp)
+                val longestWordWidth = words.maxOf { word ->
+                    textMeasurer.measure(word, style, maxLines = 1, softWrap = false).size.width
+                }
+                longestWordWidth <= maxWidthPx
+            } ?: messageStageSizeSteps.last()
+        }
+
         Text(
-            message.uppercase(),
+            upper,
             color = Paper,
             fontFamily = display,
             fontWeight = FontWeight.Black,
-            fontSize = size,
-            lineHeight = size * 1.05f,
+            fontSize = chosenSize,
+            lineHeight = chosenSize * 1.05f,
             letterSpacing = (-.5).sp,
         )
     }
@@ -774,8 +794,7 @@ private fun LibraryScreen(
     Column(
         Modifier
             .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 112.dp),
     ) {
@@ -862,8 +881,7 @@ private fun HallScreen(world: WorldState) {
     Column(
         Modifier
             .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 112.dp),
     ) {
@@ -948,8 +966,7 @@ private fun YouScreen(
     Column(
         Modifier
             .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 112.dp),
     ) {
@@ -1069,7 +1086,7 @@ private fun ProfileOverlay(world: WorldState, ui: OneUiState, onClose: () -> Uni
     var country by rememberSaveable(user?.id) { mutableStateOf(user?.countryCode?.takeIf { it in java.util.Locale.getISOCountries() }.orEmpty()) }
     var error by remember { mutableStateOf<String?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) onPhoto(uri) }
-    Column(Modifier.fillMaxSize().background(Ink).statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp)) {
+    Column(Modifier.fillMaxSize().background(Ink).safeDrawingPadding().verticalScroll(rememberScrollState()).padding(20.dp)) {
         OverlayHeader("YOUR PROFILE", "PHOTO & LOCATION", onClose)
         Spacer(Modifier.height(28.dp))
         ProfilePhoto(user, Acid, Modifier.size(100.dp).align(Alignment.CenterHorizontally))
@@ -1107,8 +1124,7 @@ private fun ChallengeOverlay(
         Column(
             Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding(),
+                .safeDrawingPadding(),
         ) {
             Row(
                 Modifier.fillMaxWidth().height(64.dp).background(Orange).padding(horizontal = 20.dp),
@@ -1260,7 +1276,7 @@ private fun HowItWorksOverlay(
 ) {
     Box(Modifier.fillMaxSize().background(Ink)) {
         LiveField(Acid, Modifier.fillMaxSize())
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp)) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(20.dp)) {
             OverlayHeader("THE RULES", "ONE SCREEN // ONE OWNER", onClose)
             Spacer(Modifier.height(30.dp))
             Text("SIMPLE ENOUGH\nTO FEEL DANGEROUS.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 39.sp, lineHeight = 36.sp, letterSpacing = (-1.5).sp)
@@ -1319,7 +1335,7 @@ private fun IdentityOverlay(
     onReclaim: () -> Unit,
 ) {
     var confirmRestore by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().background(Ink).statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(24.dp)) {
+    Column(Modifier.fillMaxSize().background(Ink).safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp)) {
         OverlayHeader("KEEP YOUR IDENTITY", "OPTIONAL // KEEP PLAYING", onClose)
         Spacer(Modifier.height(30.dp))
         Text("KEEP $handle", color = Paper, fontFamily = display, fontSize = 40.sp)
@@ -1388,8 +1404,7 @@ private fun HandleOverlay(
         Column(
             Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
+                .safeDrawingPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) {
@@ -1541,8 +1556,7 @@ private fun ReceiptOverlay(
         Column(
             Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
+                .safeDrawingPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) {
@@ -1704,8 +1718,7 @@ private fun ComposeOverlay(
         Modifier
             .fillMaxSize()
             .background(Ink)
-            .statusBarsPadding()
-            .navigationBarsPadding()
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
@@ -1770,8 +1783,7 @@ private fun VaultOverlay(
         Modifier
             .fillMaxSize()
             .background(Ink)
-            .statusBarsPadding()
-            .navigationBarsPadding()
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
@@ -1813,8 +1825,7 @@ private fun ReportOverlay(
         Modifier
             .fillMaxSize()
             .background(Ink)
-            .statusBarsPadding()
-            .navigationBarsPadding()
+            .safeDrawingPadding()
             .padding(20.dp),
     ) {
         OverlayHeader("SAFETY", "PUBLIC UGC CONTROL", onClose)
@@ -1855,8 +1866,7 @@ private fun FeedbackOverlay(
         Modifier
             .fillMaxSize()
             .background(Ink)
-            .statusBarsPadding()
-            .navigationBarsPadding()
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
@@ -1928,8 +1938,7 @@ private fun DeleteAccountOverlay(
         Modifier
             .fillMaxSize()
             .background(Ink)
-            .statusBarsPadding()
-            .navigationBarsPadding()
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
@@ -2431,7 +2440,7 @@ private fun RevengeBanner(world: WorldState, onOpen: () -> Unit, onDismiss: () -
         val headlineSize = if (compact) 61.sp else 72.sp
         val headlineLine = if (compact) 57.sp else 67.sp
         Column(
-            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+            Modifier.fillMaxSize().safeDrawingPadding()
                 .padding(horizontal = 18.dp, vertical = if (compact) 10.dp else 14.dp),
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

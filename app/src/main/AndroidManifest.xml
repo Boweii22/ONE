@@ -30,6 +30,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="one-global-screen.no1tomcodes.chatgpt.site" android:path="/" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="one" android:host="auth" android:path="/callback" />
+            </intent-filter>
         </activity>
     </application>
 
