@@ -215,6 +215,13 @@ class CloudOneRepository(context: Context) : OneRepository {
         }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
     }
 
+    override suspend fun unblockOne(id: String) {
+        runCatching {
+            rpc("unblock_one", JSONObject().put("p_blocked_id", id), authenticated = true)
+            refreshWorld()
+        }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
+    }
+
     override suspend fun deleteAccount() {
         runCatching {
             rpc("delete_my_account", JSONObject(), authenticated = true)
@@ -559,6 +566,12 @@ class CloudOneRepository(context: Context) : OneRepository {
             },
             currentContentBlocked = json.optBoolean("current_content_blocked"),
             blockedCount = json.optInt("blocked_count"),
+            blockedAccounts = json.optJSONArray("blocked_accounts")?.let { list ->
+                (0 until list.length()).map { index ->
+                    val item = list.getJSONObject(index)
+                    com.oneglobal.billboard.model.BlockedAccount(item.optString("id"), item.optString("handle"))
+                }
+            } ?: emptyList(),
             reactionCounts = json.optJSONObject("reaction_counts")?.let { counts -> counts.keys().asSequence().associateWith { counts.optInt(it) } },
             myReactions = json.optJSONArray("my_reactions")?.let { list -> (0 until list.length()).map { list.getString(it) }.toSet() } ?: emptySet(),
             adSkipAvailable = json.optBoolean("ad_skip_available"),

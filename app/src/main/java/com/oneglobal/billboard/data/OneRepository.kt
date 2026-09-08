@@ -18,6 +18,7 @@ interface OneRepository {
     fun reportCurrentMessage(reason: String)
     suspend fun blockCurrentOwner()
     suspend fun unblockAll()
+    suspend fun unblockOne(id: String)
     suspend fun deleteAccount()
     suspend fun react(reaction: String)
     suspend fun echoCurrentMessage()

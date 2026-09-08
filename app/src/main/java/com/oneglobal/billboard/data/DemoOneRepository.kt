@@ -334,6 +334,7 @@ class DemoOneRepository : OneRepository {
 
     override suspend fun blockCurrentOwner() {
         _world.update { current ->
+            val blocked = com.oneglobal.billboard.model.BlockedAccount(current.reign.owner.id, current.reign.owner.handle)
             current.copy(
                 reign = current.reign.copy(
                     owner = current.reign.owner.copy(handle = "@BLOCKED", city = "HIDDEN", countryCode = "XX", initials = "--"),
@@ -341,14 +342,26 @@ class DemoOneRepository : OneRepository {
                 ),
                 currentContentBlocked = true,
                 blockedCount = current.blockedCount + 1,
+                blockedAccounts = current.blockedAccounts + blocked,
             )
         }
         _events.emit(OneEvent.Error("Blocked. Their content is now hidden from you."))
     }
 
     override suspend fun unblockAll() {
-        _world.update { it.copy(currentContentBlocked = false, blockedCount = 0) }
+        _world.update { it.copy(currentContentBlocked = false, blockedCount = 0, blockedAccounts = emptyList()) }
         _events.emit(OneEvent.Error("Blocked accounts restored."))
+    }
+
+    override suspend fun unblockOne(id: String) {
+        _world.update { current ->
+            current.copy(
+                blockedCount = (current.blockedCount - 1).coerceAtLeast(0),
+                blockedAccounts = current.blockedAccounts.filterNot { it.id == id },
+                currentContentBlocked = if (current.reign.owner.id == id) false else current.currentContentBlocked,
+            )
+        }
+        _events.emit(OneEvent.Error("Account unblocked."))
     }
 
     override suspend fun deleteAccount() {

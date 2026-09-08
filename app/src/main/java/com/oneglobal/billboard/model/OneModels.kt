@@ -152,7 +152,10 @@ data class WorldState(
     val userTakeovers: Int? = null,
     val userLongestReign: Int? = null,
     val userVerifiedViews: Int? = null,
+    val blockedAccounts: List<BlockedAccount> = emptyList(),
 )
+
+data class BlockedAccount(val id: String, val handle: String)
 
 data class OneUiState(
     val onboardingComplete: Boolean = false,

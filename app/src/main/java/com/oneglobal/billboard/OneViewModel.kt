@@ -509,6 +509,10 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.unblockAll() }
     }
 
+    fun unblockOne(id: String) {
+        viewModelScope.launch { repository.unblockOne(id) }
+    }
+
     fun openDeleteAccount() {
         _ui.update { it.copy(overlay = Overlay.DELETE_ACCOUNT) }
     }

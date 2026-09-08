@@ -223,6 +223,7 @@ fun OneApp(
                             onShareReceipt(it.copy(appViews = world.appViews, webViews = world.webViews))
                         }
                     },
+                    onUnblockCurrentOwner = { viewModel.unblockOne(world.reign.owner.id) },
                 )
                 MainTab.LIBRARY -> LibraryScreen(
                     world = world,
@@ -247,6 +248,7 @@ fun OneApp(
                     onOpenPrivacy = onOpenPrivacy,
                     onFeedback = viewModel::openFeedback,
                     onUnblockAll = viewModel::unblockAll,
+                    onUnblockOne = viewModel::unblockOne,
                     onDeleteAccount = viewModel::openDeleteAccount,
                     onHowItWorks = viewModel::openHowItWorks,
                     onEditProfile = viewModel::openProfile,
@@ -491,6 +493,7 @@ private fun LiveScreen(
     onShareReign: () -> Unit,
     onReact: (String) -> Unit,
     onEcho: () -> Unit,
+    onUnblockCurrentOwner: () -> Unit,
 ) {
     val accent = palette(world.reign.palette)
     val isOwner = world.reign.owner.id == world.currentUserId
@@ -540,7 +543,7 @@ private fun LiveScreen(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 300.dp).padding(vertical = 12.dp),
             )
             } else {
-                HiddenOwnerStage(accent)
+                HiddenOwnerStage(accent, onUnblockCurrentOwner)
             }
             ViewLedger(world, accent, protectedSeconds)
             Spacer(Modifier.height(12.dp))
@@ -558,7 +561,7 @@ private fun LiveScreen(
 }
 
 @Composable
-private fun HiddenOwnerStage(accent: Color) {
+private fun HiddenOwnerStage(accent: Color, onUnblock: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 18.dp)
             .clip(RoundedCornerShape(7.dp)).background(InkRaised)
@@ -568,6 +571,10 @@ private fun HiddenOwnerStage(accent: Color) {
         Text("CONTENT HIDDEN", color = accent, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
         Text("YOU'VE HIDDEN\nTHIS OWNER.", color = Paper, fontFamily = display, fontWeight = FontWeight.Black, fontSize = 34.sp, lineHeight = 32.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 13.dp))
         Text("Their message is live for everyone else. The game continues — you can still take the screen.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
+        Spacer(Modifier.height(16.dp))
+        Surface(modifier = Modifier.clickable(onClick = onUnblock), color = Color.Transparent, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, accent.copy(alpha = .5f))) {
+            Text("UNBLOCK TO SEE THIS AGAIN", color = accent, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp, vertical = 11.dp))
+        }
     }
 }
 
@@ -913,6 +920,7 @@ private fun YouScreen(
     onOpenPrivacy: () -> Unit,
     onFeedback: () -> Unit,
     onUnblockAll: () -> Unit,
+    onUnblockOne: (String) -> Unit,
     onDeleteAccount: () -> Unit,
     onHowItWorks: () -> Unit,
     onEditProfile: () -> Unit,
@@ -1022,13 +1030,7 @@ private fun YouScreen(
         )
         if (world.blockedCount > 0) {
             Spacer(Modifier.height(10.dp))
-            SettingsCard(
-                title = "BLOCKED ACCOUNTS",
-                detail = "${world.blockedCount} account(s) hidden from your live screen, Hall and activity.",
-                badge = "CLEAR",
-                accent = Orange,
-                onClick = onUnblockAll,
-            )
+            BlockedAccountsCard(world.blockedAccounts, onUnblockOne, onUnblockAll)
         }
         Spacer(Modifier.height(10.dp))
         SettingsCard(
@@ -2276,6 +2278,64 @@ private fun SettingsCard(title: String, detail: String, badge: String, accent: C
             Text(detail, color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 3.dp))
         }
         Text(badge, color = accent, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = if (badge == "›") 22.sp else 8.sp)
+    }
+}
+
+@Composable
+private fun BlockedAccountsCard(
+    accounts: List<com.oneglobal.billboard.model.BlockedAccount>,
+    onUnblockOne: (String) -> Unit,
+    onUnblockAll: () -> Unit,
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(InkRaised)
+            .border(1.dp, Color.White.copy(alpha = .11f), RoundedCornerShape(7.dp)),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 90.dp).clickable { expanded = !expanded }.padding(horizontal = 15.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(36.dp).clip(CircleShape).border(1.dp, Orange.copy(alpha = .7f), CircleShape), contentAlignment = Alignment.Center) {
+                Text("●", color = Orange, fontWeight = FontWeight.Black, fontSize = 15.sp)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("BLOCKED ACCOUNTS", color = Paper, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                Text("${accounts.size} account(s) hidden from your live screen, Hall and activity.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 3.dp))
+            }
+            Text(if (expanded) "▲" else "▼", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
+        }
+        if (expanded) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .08f)))
+            accounts.forEach { account ->
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 13.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(account.handle, color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Surface(
+                        modifier = Modifier.clickable { onUnblockOne(account.id) },
+                        color = Color.Transparent,
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, Orange.copy(alpha = .5f)),
+                    ) {
+                        Text("UNBLOCK", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
+                    }
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .08f)))
+            Text(
+                "UNBLOCK ALL",
+                color = Muted,
+                fontFamily = mono,
+                fontWeight = FontWeight.Black,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onUnblockAll).padding(14.dp),
+            )
+        }
     }
 }
 
