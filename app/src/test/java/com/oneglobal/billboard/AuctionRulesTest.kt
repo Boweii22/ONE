@@ -8,9 +8,19 @@ import org.junit.Test
 class AuctionRulesTest {
     @Test
     fun compositionRulesRejectDangerousFormatsEarly() {
-        assertEquals("Links are not allowed in the founding season.", AuctionRules.validateMessage("visit https://example.com"))
-        assertEquals("Phone numbers are not allowed.", AuctionRules.validateMessage("call +44 7700 900123"))
+        assertEquals("That looks like a link.", AuctionRules.validateMessage("visit https://example.com"))
+        assertEquals("That looks like a link.", AuctionRules.validateMessage("find me at nova.com"))
+        assertEquals("That looks like an email address.", AuctionRules.validateMessage("email me at nova@example.com"))
+        assertEquals("That looks like a phone number.", AuctionRules.validateMessage("call +44 7700 900123"))
+        assertEquals("That looks like a phone number.", AuctionRules.validateMessage("call 07700 900123", regionHint = "GB"))
         assertNull(AuctionRules.validateMessage("MUM, I MADE IT TO THE WHOLE WORLD."))
+    }
+
+    @Test
+    fun phoneDetectionDoesNotFalselyRejectOrdinaryNumbersOrHandles() {
+        assertNull(AuctionRules.validateMessage("MY LUCKY NUMBER IS 123456789.", regionHint = "US"))
+        assertNull(AuctionRules.validateMessage("TAKE IT FROM @PLAYER_9B2CD7.", regionHint = "US"))
+        assertNull(AuctionRules.validateMessage("REIGN NUMBER 4829201 IS MINE.", regionHint = "US"))
     }
 
     @Test

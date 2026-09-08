@@ -26,6 +26,7 @@ enum class MessageStatus {
     APPROVED,
     REVIEWING,
     REJECTED,
+    REVOKED,
 }
 
 enum class ChallengePhase {
@@ -62,6 +63,7 @@ data class OneMessage(
     val status: MessageStatus,
     val createdAtMillis: Long,
     val timesDeployed: Int = 0,
+    val rejectionReason: String? = null,
 )
 
 data class Reign(

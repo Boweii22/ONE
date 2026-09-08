@@ -30,8 +30,8 @@ android {
         applicationId = "com.tomribowei.one"
         minSdk = 26
         targetSdk = 36
-        versionCode = 27
-        versionName = "1.0.17"
+        versionCode = 28
+        versionName = "1.0.18"
         buildConfigField("String", "ADMOB_REWARDED_UNIT_ID", "\"" + onePublicValue("ADMOB_REWARDED_UNIT_ID") + "\"")
         manifestPlaceholders["admobAppId"] = onePublicValue("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
 
@@ -117,6 +117,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-ads:24.0.0")
     implementation("com.google.android.ump:user-messaging-platform:3.2.0")
     implementation("com.onesignal:OneSignal:5.9.8")
+    implementation("com.googlecode.libphonenumber:libphonenumber:8.13.50")
 
     testImplementation("junit:junit:4.13.2")
 }

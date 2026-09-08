@@ -142,15 +142,39 @@ class CloudOneRepository(context: Context) : OneRepository {
             val result = rpc("submit_message", JSONObject().put("p_text", text), authenticated = true)
             refreshWorld()
             val message = parseMessage(result)
-            if (message.status == MessageStatus.APPROVED) {
-                _events.emit(OneEvent.MessageApproved(message))
-            } else {
-                _events.emit(OneEvent.MessageRejected("Message queued for human safety review."))
+            when (message.status) {
+                MessageStatus.REJECTED -> _events.emit(OneEvent.MessageRejected(message.rejectionReason ?: "That message can't go live."))
+                MessageStatus.REVIEWING -> {
+                    _events.emit(OneEvent.MessageRejected("Screening automatically. This usually takes only a few seconds."))
+                    scope.launch { triggerMessageModeration(message.id) }
+                }
+                else -> _events.emit(OneEvent.MessageApproved(message))
             }
         }.onFailure { error ->
             Log.e(LOG_TAG, "submit_message failed", error)
             _events.emit(OneEvent.MessageRejected(error.userMessage()))
         }
+    }
+
+    /** Fire-and-forget: asks the moderation model to score this message and apply a verdict. */
+    private suspend fun triggerMessageModeration(messageId: String) {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                val token = ensureSession().accessToken
+                val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/functions/v1/moderate-message", "POST", token)
+                connection.outputStream.use { it.write(JSONObject().put("message_id", messageId).toString().toByteArray()) }
+                connection.readJson()
+            }
+        }
+        runCatching { refreshWorld() }
+    }
+
+    override suspend fun deleteMessage(id: String) {
+        runCatching {
+            val result = rpc("delete_my_message", JSONObject().put("p_message_id", id), authenticated = true)
+            refreshWorld()
+            _events.emit(OneEvent.Error(if (result.optString("mode") == "removed") "Message deleted." else "Message removed from your library."))
+        }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
     }
 
     override suspend fun grantAdReward() {
@@ -598,6 +622,7 @@ class CloudOneRepository(context: Context) : OneRepository {
         status = runCatching { MessageStatus.valueOf(json.optString("status", "approved").uppercase()) }.getOrDefault(MessageStatus.REVIEWING),
         createdAtMillis = json.optLong("created_at_ms", System.currentTimeMillis()),
         timesDeployed = json.optInt("times_deployed"),
+        rejectionReason = json.optString("rejection_reason").takeIf { it.isNotBlank() },
     )
 
     private fun parseHall(json: JSONObject): List<HallEntry> =

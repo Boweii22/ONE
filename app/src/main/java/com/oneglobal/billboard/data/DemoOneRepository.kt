@@ -316,6 +316,24 @@ class DemoOneRepository : OneRepository {
         _events.emit(OneEvent.MessageApproved(approved))
     }
 
+    override suspend fun deleteMessage(id: String) {
+        val target = _world.value.messages.firstOrNull { it.id == id } ?: return
+        if (target.status == MessageStatus.REVIEWING || target.status == MessageStatus.REVOKED) {
+            _events.emit(OneEvent.Error(if (target.status == MessageStatus.REVIEWING) "Message under review can't be deleted yet." else "Revoked messages can't be deleted."))
+            return
+        }
+        _world.update { current ->
+            current.copy(
+                messages = if (target.timesDeployed == 0) {
+                    current.messages.filterNot { it.id == id }
+                } else {
+                    current.messages.filterNot { it.id == id } // demo has no soft-delete storage; drop it from the visible list either way
+                },
+            )
+        }
+        _events.emit(OneEvent.Error(if (target.timesDeployed == 0) "Message deleted." else "Message removed from your library."))
+    }
+
     override suspend fun grantAdReward() {
         delay(2_400)
         val remaining = (_world.value.adSkipsRemainingToday - 1).coerceAtLeast(0)

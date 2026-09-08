@@ -297,6 +297,10 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.submitMessage(text) }
     }
 
+    fun deleteMessage(id: String) {
+        viewModelScope.launch { repository.deleteMessage(id) }
+    }
+
     fun react(reaction: String) {
         if (reaction in world.value.myReactions) { showToast("You've already sent this reaction for this reign."); return }
         viewModelScope.launch { repository.react(reaction) }

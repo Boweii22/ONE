@@ -13,6 +13,7 @@ interface OneRepository {
 
     suspend fun challenge(messageId: String, onPhase: (ChallengePhase, String) -> Unit): ChallengeResult
     suspend fun submitMessage(text: String)
+    suspend fun deleteMessage(id: String)
     suspend fun grantAdReward()
     fun grantPurchasedCredits(amount: Int)
     fun reportCurrentMessage(reason: String)

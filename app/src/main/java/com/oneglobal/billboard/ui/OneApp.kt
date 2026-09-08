@@ -233,6 +233,7 @@ fun OneApp(
                         viewModel.selectMessage(id)
                         viewModel.openChallenge()
                     },
+                    onDelete = viewModel::deleteMessage,
                 )
                 MainTab.HALL -> HallScreen(world)
                 MainTab.YOU -> YouScreen(
@@ -768,6 +769,7 @@ private fun LibraryScreen(
     selectedId: String?,
     onCompose: () -> Unit,
     onDeploy: (String) -> Unit,
+    onDelete: (String) -> Unit,
 ) {
     Column(
         Modifier
@@ -788,6 +790,7 @@ private fun LibraryScreen(
                 message = message,
                 selected = message.id == selectedId,
                 onDeploy = { onDeploy(message.id) },
+                onDelete = { onDelete(message.id) },
             )
             Spacer(Modifier.height(11.dp))
         }
@@ -797,12 +800,14 @@ private fun LibraryScreen(
 }
 
 @Composable
-private fun MessageCard(message: OneMessage, selected: Boolean, onDeploy: () -> Unit) {
+private fun MessageCard(message: OneMessage, selected: Boolean, onDeploy: () -> Unit, onDelete: () -> Unit) {
     val statusColor = when (message.status) {
         MessageStatus.APPROVED -> Acid
         MessageStatus.REVIEWING -> Ice
         MessageStatus.REJECTED -> Orange
+        MessageStatus.REVOKED -> Orange
     }
+    val canDelete = message.status != MessageStatus.REVIEWING && message.status != MessageStatus.REVOKED
     Column(
         Modifier
             .fillMaxWidth()
@@ -811,12 +816,24 @@ private fun MessageCard(message: OneMessage, selected: Boolean, onDeploy: () -> 
             .border(1.dp, if (selected) statusColor.copy(alpha = .65f) else Color.White.copy(alpha = .08f), RoundedCornerShape(7.dp))
             .padding(17.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             StatusPill(message.status.name, statusColor)
-            Text("USED ${message.timesDeployed}×", color = Muted, fontFamily = mono, fontSize = 12.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("USED ${message.timesDeployed}×", color = Muted, fontFamily = mono, fontSize = 12.sp)
+                if (canDelete) {
+                    Spacer(Modifier.width(12.dp))
+                    Text("DELETE", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.clickable(onClick = onDelete))
+                }
+            }
         }
         Spacer(Modifier.height(16.dp))
         Text("“${message.text}”", color = if (message.status == MessageStatus.APPROVED) Paper else Muted, fontWeight = FontWeight.Black, fontSize = 21.sp, lineHeight = 24.sp)
+        if (message.status == MessageStatus.REJECTED && !message.rejectionReason.isNullOrBlank()) {
+            Text(message.rejectionReason, color = Orange, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 8.dp))
+        }
+        if (message.status == MessageStatus.REVOKED) {
+            Text("Removed after an upheld report. This message can't be redeployed.", color = Orange, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 8.dp))
+        }
         if (message.status == MessageStatus.APPROVED) {
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -1723,8 +1740,8 @@ private fun ComposeOverlay(
         }
         Spacer(Modifier.height(17.dp))
         ScreeningRow("ON-DEVICE PRE-FILTER", ui.composeText.isNotBlank())
-        ScreeningRow("NO LINKS OR PHONE NUMBERS", ui.composeError?.contains("Links") != true && ui.composeError?.contains("Phone") != true)
-        ScreeningRow("SERVER SAFETY REVIEW", valid)
+        ScreeningRow("NO LINKS, EMAILS OR PHONE NUMBERS", ui.composeError?.contains("looks like") != true)
+        ScreeningRow("AUTOMATIC SAFETY CHECK", valid)
         ScreeningRow("REPORT + BAN CONTROLS", true)
         Spacer(Modifier.height(20.dp))
         Button(
