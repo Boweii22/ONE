@@ -432,9 +432,19 @@ class CloudOneRepository(context: Context) : OneRepository {
             "${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/user/identities/authorize?provider=google&redirect_to=$redirect",
             "GET",
             current.accessToken,
-        )
+        ).apply {
+            // This endpoint can answer with a redirect directly. Do not let
+            // HttpURLConnection follow it and turn Google's HTML into "JSON".
+            instanceFollowRedirects = false
+        }
+        val responseCode = connection.responseCode
+        if (responseCode in 300..399) {
+            return@withContext connection.getHeaderField("Location")
+                ?.takeIf { it.startsWith("https://") }
+                ?: throw IllegalStateException("Google linking returned an invalid redirect.")
+        }
         val payload = connection.readJson()
-        if (connection.responseCode !in 200..299) {
+        if (responseCode !in 200..299) {
             val detail = payload.optString("msg", payload.optString("error_description", "Could not start Google linking."))
             throw IllegalStateException(detail)
         }
