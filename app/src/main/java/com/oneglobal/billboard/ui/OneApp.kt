@@ -156,6 +156,8 @@ fun OneApp(
     onPurchaseCredits: (Int, (Boolean, String, Int) -> Unit) -> Unit,
     onRestorePurchases: ((Boolean, String) -> Unit) -> Unit,
     onRequestPush: ((Boolean) -> Unit) -> Unit,
+    onDisablePush: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     onShareReceipt: (ReignReceipt) -> Unit,
     onShareONE: () -> Unit,
     onGoogle: (Boolean) -> Unit,
@@ -238,14 +240,14 @@ fun OneApp(
                     },
                     onDelete = viewModel::deleteMessage,
                 )
-                MainTab.HALL -> HallScreen(world)
+                MainTab.HALL -> HallScreen(world, onTakeIt = { viewModel.selectTab(MainTab.LIVE) })
                 MainTab.YOU -> YouScreen(
                     world = world,
                     ui = ui,
                     revenueCatReady = revenueCatReady,
                     oneSignalReady = oneSignalReady,
                     onVault = viewModel::openVault,
-                    onEnablePush = { viewModel.enablePush(onRequestPush) },
+                    onEnablePush = { viewModel.toggleRevengeAlerts(onRequestPush, onDisablePush, onOpenNotificationSettings) },
                     onShareONE = onShareONE,
                     onEditHandle = viewModel::openHandleEditor,
                     onIdentityBackup = viewModel::openIdentityBackup,
@@ -386,8 +388,15 @@ fun OneApp(
         ) {
             RevengeBanner(
                 world = world,
-                onOpen = viewModel::openLastReceipt,
+                onOpen = viewModel::takeItBack,
                 onDismiss = viewModel::dismissRevenge,
+            )
+        }
+
+        if (ui.pushPromptVisible) {
+            PushPermissionPrompt(
+                onAccept = { viewModel.acceptPushPrompt(onRequestPush) },
+                onDismiss = viewModel::dismissPushPrompt,
             )
         }
     }
@@ -869,14 +878,23 @@ private fun MessageCard(message: OneMessage, selected: Boolean, onDeploy: () -> 
 }
 
 @Composable
-private fun HallScreen(world: WorldState) {
+private fun HallScreen(world: WorldState, onTakeIt: () -> Unit) {
     var period by rememberSaveable { mutableStateOf(HallPeriod.TODAY) }
+    var sort by rememberSaveable { mutableStateOf(HallSort.VIEWS) }
     var showFull by rememberSaveable { mutableStateOf(false) }
     val today = world.hallToday.ifEmpty { world.hall }
     val allTime = world.hallAllTime.ifEmpty { world.hall }
-    val selectedEntries = if (period == HallPeriod.TODAY) today else allTime
-    val visibleEntries = if (showFull) selectedEntries else (selectedEntries.take(4) + selectedEntries.filter { it.owner.id == world.currentUserId }).distinctBy { it.owner.id }
+    val periodEntries = if (period == HallPeriod.TODAY) today else allTime
+    val sortedEntries = remember(periodEntries, sort) { periodEntries.sortedByDescending { it.metricFor(sort) } }
+    val visibleEntries = if (showFull) sortedEntries else (sortedEntries.take(5) + sortedEntries.filter { it.owner.id == world.currentUserId }).distinctBy { it.owner.id }
     val selectedPeriodIsLive = world.connected && !world.demoMode && (period == HallPeriod.TODAY || world.hallAllTimeLive)
+    // "Today's winning message" is the actual champion (server rank 1), independent
+    // of whichever column the viewer is currently sorting by.
+    val champion = today.firstOrNull { it.rank == 1 } ?: today.firstOrNull()
+    val currentUserRank = sortedEntries.indexOfFirst { it.owner.id == world.currentUserId }
+    val gapToNextRank = if (currentUserRank > 0) {
+        sortedEntries[currentUserRank - 1].metricFor(sort) - sortedEntries[currentUserRank].metricFor(sort)
+    } else null
 
     Column(
         Modifier
@@ -892,27 +910,21 @@ private fun HallScreen(world: WorldState) {
             }
             StatusPill(if (selectedPeriodIsLive) "LIVE DATA" else if (world.demoMode) "PREVIEW" else "SYNCING", if (selectedPeriodIsLive) Acid else Orange)
         }
-        Row(Modifier.fillMaxWidth().padding(top = 14.dp).height(43.dp).clip(RoundedCornerShape(7.dp)).border(1.dp, Color.White.copy(alpha = .14f), RoundedCornerShape(7.dp))) {
-            Box(Modifier.weight(1f).fillMaxHeight().background(if (period == HallPeriod.TODAY) Acid else Color.Transparent).clickable { period = HallPeriod.TODAY; showFull = false }, contentAlignment = Alignment.Center) {
-                Text("TODAY", color = if (period == HallPeriod.TODAY) Ink else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
-            }
-            Box(Modifier.weight(1f).fillMaxHeight().background(if (period == HallPeriod.ALL_TIME) Acid else Color.Transparent).clickable { period = HallPeriod.ALL_TIME; showFull = false }, contentAlignment = Alignment.Center) {
-                Text("ALL TIME", color = if (period == HallPeriod.ALL_TIME) Ink else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
-            }
+        Row(Modifier.fillMaxWidth().padding(top = 14.dp)) {
+            HallPill("TODAY", period == HallPeriod.TODAY, Modifier.weight(1f)) { period = HallPeriod.TODAY; showFull = false }
+            Spacer(Modifier.width(8.dp))
+            HallPill("ALL TIME", period == HallPeriod.ALL_TIME, Modifier.weight(1f)) { period = HallPeriod.ALL_TIME; showFull = false }
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth()) {
+            HallSortChip("◇ LONGEST", sort == HallSort.LONGEST, Modifier.weight(1f)) { sort = HallSort.LONGEST }
+            Spacer(Modifier.width(6.dp))
+            HallSortChip("TAKEOVERS", sort == HallSort.TAKEOVERS, Modifier.weight(1f)) { sort = HallSort.TAKEOVERS }
+            Spacer(Modifier.width(6.dp))
+            HallSortChip("VIEWS", sort == HallSort.VIEWS, Modifier.weight(1f)) { sort = HallSort.VIEWS }
         }
         Spacer(Modifier.height(18.dp))
-        Text("Swipe the table to see all stats", color = Muted, fontSize = 12.sp)
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-        Column(Modifier.width(560.dp)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-            Text("#", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.width(28.dp))
-            Text("OWNER", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.weight(1f))
-            Text("LONGEST", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.width(90.dp), textAlign = TextAlign.End)
-            Text("TAKEOVERS", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.width(90.dp), textAlign = TextAlign.End)
-            Text("VIEWS", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.width(62.dp), textAlign = TextAlign.End)
-        }
-        Spacer(Modifier.height(7.dp))
-        AnimatedContent(period, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(140)) }, label = "hall-period") {
+        AnimatedContent(period to sort, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(140)) }, label = "hall-period") {
             Column {
                 if (visibleEntries.isEmpty()) {
                     Column(Modifier.fillMaxWidth().padding(vertical = 52.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -921,25 +933,148 @@ private fun HallScreen(world: WorldState) {
                         Text("The first verified reign will appear here.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
                     }
                 } else {
-                    visibleEntries.forEach { entry ->
+                    visibleEntries.forEachIndexed { index, entry ->
                         val isCurrentUser = entry.owner.id == world.currentUserId
                         if (isCurrentUser) YourRankDivider()
-                        HallRow(entry, isCurrentUser)
+                        HallRow(entry, sort, isCurrentUser, emphasized = !isCurrentUser && index < 3)
+                        if (index == 2 && period == HallPeriod.TODAY && champion != null) {
+                            Spacer(Modifier.height(12.dp))
+                            HallChampionCard(champion)
+                            Spacer(Modifier.height(12.dp))
+                        } else {
+                            Spacer(Modifier.height(if (isCurrentUser) 12.dp else 4.dp))
+                        }
+                    }
+                    if (gapToNextRank != null && gapToNextRank > 0) {
+                        HallGapCard(gapToNextRank, sort, onTakeIt)
+                        Spacer(Modifier.height(18.dp))
                     }
                 }
             }
         }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            HallStat(today.size.toString(), "REIGNS TODAY")
+            HallStat(world.takeoversToday.toString(), "TAKEOVERS TODAY")
+            HallStat(formatNumber(today.sumOf { it.verifiedViews }), "TOTAL VIEWS TODAY")
+        }
         Spacer(Modifier.height(18.dp))
-        }
-        }
         Surface(color = if (showFull) Acid else Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Acid.copy(alpha = .75f)), modifier = Modifier.fillMaxWidth().clickable { showFull = !showFull }) {
             Text(if (showFull) "COLLAPSE LEADERBOARD  ↑" else "VIEW FULL LEADERBOARD  ↓", color = if (showFull) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
         }
-        Text("${selectedEntries.size} VERIFIED REIGNS // ${if (selectedPeriodIsLive) "UPDATED LIVE" else "SERVER UPDATE REQUIRED"}", color = Muted, fontFamily = mono, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
+        Text("◇ ${sortedEntries.size} VERIFIED REIGNS // ${if (selectedPeriodIsLive) "UPDATED LIVE" else "SERVER UPDATE REQUIRED"}", color = Muted, fontFamily = mono, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
     }
 }
 
 private enum class HallPeriod { TODAY, ALL_TIME }
+private enum class HallSort { LONGEST, TAKEOVERS, VIEWS }
+
+private fun HallEntry.metricFor(sort: HallSort): Int = when (sort) {
+    HallSort.LONGEST -> reignSeconds
+    HallSort.TAKEOVERS -> takeovers ?: 0
+    HallSort.VIEWS -> verifiedViews
+}
+
+private fun HallEntry.metricLabelFor(sort: HallSort): String = when (sort) {
+    HallSort.LONGEST -> formatDuration(reignSeconds.toLong())
+    HallSort.TAKEOVERS -> takeovers?.toString() ?: "—"
+    HallSort.VIEWS -> formatNumber(verifiedViews)
+}
+
+private fun formatMetricGap(gap: Int, sort: HallSort): String = when (sort) {
+    HallSort.LONGEST -> "${formatDuration(gap.toLong())} MORE"
+    HallSort.TAKEOVERS -> "$gap MORE TAKEOVER${if (gap == 1) "" else "S"}"
+    HallSort.VIEWS -> "${formatNumber(gap)} MORE VIEWS"
+}
+
+@Composable
+private fun HallPill(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .height(43.dp)
+            .clip(RoundedCornerShape(7.dp))
+            .border(1.dp, if (selected) Acid else Color.White.copy(alpha = .18f), RoundedCornerShape(7.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, color = if (selected) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun HallSortChip(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .height(34.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .border(1.dp, if (selected) Acid else Color.White.copy(alpha = .14f), RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, color = if (selected) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp, letterSpacing = .5.sp)
+    }
+}
+
+@Composable
+private fun HallChampionCard(entry: HallEntry) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Acid.copy(alpha = .14f))
+            .border(1.dp, Acid.copy(alpha = .55f), RoundedCornerShape(10.dp))
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(Acid))
+            Spacer(Modifier.width(7.dp))
+            Text("TODAY'S WINNING MESSAGE", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp)
+        }
+        Spacer(Modifier.height(10.dp))
+        Text("“${entry.message}”", color = Paper, fontWeight = FontWeight.Black, fontSize = 17.sp, lineHeight = 21.sp)
+        Text("— ${entry.owner.handle}", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column {
+                Text("HELD FOR", color = Muted, fontFamily = mono, fontSize = 10.sp, letterSpacing = .8.sp)
+                Text(formatDuration(entry.reignSeconds.toLong()), color = Paper, fontWeight = FontWeight.Black, fontFamily = mono, fontSize = 15.sp)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(formatNumber(entry.verifiedViews), color = Paper, fontWeight = FontWeight.Black, fontFamily = mono, fontSize = 15.sp)
+                Text(if (entry.verifiedViews == 1) "PERSON" else "PEOPLE", color = Muted, fontFamily = mono, fontSize = 10.sp, letterSpacing = .8.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HallGapCard(gap: Int, sort: HallSort, onTakeIt: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = .05f))
+            .border(1.dp, Color.White.copy(alpha = .12f), RoundedCornerShape(10.dp))
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column {
+            Text("YOU'RE RANKING", color = Muted, fontFamily = mono, fontSize = 10.sp, letterSpacing = .8.sp)
+            Text(formatMetricGap(gap, sort), color = Paper, fontWeight = FontWeight.Black, fontSize = 13.sp)
+        }
+        Surface(color = Acid, shape = RoundedCornerShape(6.dp), modifier = Modifier.clickable(onClick = onTakeIt)) {
+            Text("TAKE IT  →", color = Ink, fontWeight = FontWeight.Black, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+        }
+    }
+}
+
+@Composable
+private fun HallStat(value: String, label: String) {
+    Column {
+        Text(value, color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 24.sp, letterSpacing = (-.8).sp)
+        Text(label, color = Muted, fontFamily = mono, fontSize = 10.sp, letterSpacing = .6.sp, modifier = Modifier.padding(top = 2.dp))
+    }
+}
 
 @Composable
 private fun YouScreen(
@@ -1005,8 +1140,10 @@ private fun YouScreen(
         Spacer(Modifier.height(10.dp))
         SettingsCard(
             title = "REVENGE ALERTS",
-            detail = if (ui.pushEnabled) "Armed. You’ll know the second ONE is taken." else "Get the exact views from your reign when dethroned.",
+            detail = "A push the second someone takes the screen from you." +
+                if (ui.pushBlocked) "\nBlocked in Android settings — tap to fix." else "",
             badge = when {
+                ui.pushBlocked -> "BLOCKED"
                 ui.pushEnabled -> "ON"
                 oneSignalReady -> "ARM"
                 else -> "OFF"
@@ -2193,46 +2330,61 @@ private fun HallHero(entry: HallEntry) {
 }
 
 @Composable
-private fun HallRow(entry: HallEntry, isCurrentUser: Boolean = false) {
+private fun HallRow(entry: HallEntry, sort: HallSort, isCurrentUser: Boolean, emphasized: Boolean) {
     val rankColor = when (entry.rank) { 1 -> Acid; 2 -> Ice; 3 -> Orange; else -> Muted }
-    Box(Modifier.fillMaxWidth().height(70.dp)) {
-        if (isCurrentUser) {
-            Canvas(Modifier.fillMaxSize()) {
-                val tooth = 7.dp.toPx()
-                val path = Path().apply {
-                    moveTo(0f, tooth)
-                    var x = 0f
-                    var high = true
-                    while (x < size.width) {
-                        lineTo(x, if (high) 0f else tooth)
-                        x += tooth
-                        high = !high
-                    }
-                    lineTo(size.width, size.height - tooth)
-                    high = false
-                    x = size.width
-                    while (x > 0f) {
-                        lineTo(x, if (high) size.height else size.height - tooth)
-                        x -= tooth
-                        high = !high
-                    }
-                    close()
-                }
-                drawPath(path, Acid)
-            }
-        }
-        Row(Modifier.fillMaxSize().border(0.5.dp, Color.White.copy(alpha = .08f)).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(entry.rank.toString(), color = if (isCurrentUser) Ink else rankColor, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.width(28.dp))
-            ProfilePhoto(entry.owner, if (isCurrentUser) Ink else rankColor, Modifier.size(42.dp))
-            Spacer(Modifier.width(9.dp))
+    val podium = entry.rank in 1..3
+    if (isCurrentUser) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(Acid)
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (podium) RankCrown(entry.rank, Ink, Modifier.width(50.dp)) else Text(entry.rank.toString(), color = Ink, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.width(28.dp))
+            ProfilePhoto(entry.owner, Ink, Modifier.size(38.dp))
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(entry.owner.handle, color = if (isCurrentUser) Ink else Paper, fontWeight = FontWeight.Black, fontSize = 12.sp, maxLines = 1)
-                Text(entry.owner.locationLabel(), color = if (isCurrentUser) Ink.copy(alpha = .65f) else Muted, fontFamily = mono, fontSize = 12.sp)
+                Text(entry.owner.handle, color = Ink, fontWeight = FontWeight.Black, fontSize = 13.sp, maxLines = 1)
+                Text(entry.owner.locationLabel(), color = Ink.copy(alpha = .7f), fontFamily = mono, fontSize = 11.sp)
             }
-            Text(formatDuration(entry.reignSeconds.toLong()), color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.width(90.dp), textAlign = TextAlign.End)
-            Text(entry.takeovers?.toString() ?: "—", color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.width(90.dp), textAlign = TextAlign.End)
-            Text(formatNumber(entry.verifiedViews), color = if (isCurrentUser) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.width(62.dp), textAlign = TextAlign.End)
+            Text(entry.metricLabelFor(sort), color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 15.sp)
         }
+        return
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = if (emphasized) 10.dp else 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (podium) {
+            RankCrown(entry.rank, rankColor, Modifier.width(50.dp))
+        } else {
+            Text(
+                entry.rank.toString(),
+                color = rankColor,
+                fontWeight = FontWeight.Black,
+                fontFamily = display,
+                fontSize = if (emphasized) 22.sp else 15.sp,
+                modifier = Modifier.width(30.dp),
+            )
+        }
+        ProfilePhoto(entry.owner, rankColor, Modifier.size(if (emphasized) 40.dp else 32.dp))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(entry.owner.handle, color = Paper, fontWeight = FontWeight.Black, fontSize = if (emphasized) 13.sp else 12.sp, maxLines = 1)
+            Text(entry.owner.locationLabel(), color = Muted, fontFamily = mono, fontSize = 11.sp)
+        }
+        Text(entry.metricLabelFor(sort), color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = if (emphasized) 15.sp else 13.sp)
+    }
+}
+
+@Composable
+private fun RankCrown(rank: Int, color: Color, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text("♛", color = color, fontSize = 15.sp)
+        Spacer(Modifier.width(3.dp))
+        Text("#$rank", color = color, fontWeight = FontWeight.Black, fontFamily = mono, fontSize = 13.sp)
     }
 }
 
@@ -2429,6 +2581,17 @@ private fun ErrorStrip(text: String) {
     Surface(color = Orange.copy(alpha = .12f), shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, Orange.copy(alpha = .35f))) {
         Text(text, color = Orange, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(11.dp))
     }
+}
+
+@Composable
+private fun PushPermissionPrompt(onAccept: () -> Unit, onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("YOU OWN THE SCREEN.", fontFamily = display, fontWeight = FontWeight.Black) },
+        text = { Text("Want to know the second someone takes it?") },
+        confirmButton = { TextButton(onClick = onAccept) { Text("Yes, alert me") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Not now") } },
+    )
 }
 
 @Composable

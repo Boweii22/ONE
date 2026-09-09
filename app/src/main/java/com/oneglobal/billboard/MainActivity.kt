@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -14,6 +15,8 @@ import com.oneglobal.billboard.model.ReignReceipt
 import com.oneglobal.billboard.ui.OneApp
 import com.oneglobal.billboard.ui.theme.OneTheme
 import com.onesignal.OneSignal
+import com.onesignal.notifications.INotificationClickEvent
+import com.onesignal.notifications.INotificationClickListener
 import com.onesignal.user.subscriptions.IPushSubscriptionObserver
 import com.onesignal.user.subscriptions.PushSubscriptionChangedState
 import com.revenuecat.purchases.CustomerInfo
@@ -52,6 +55,8 @@ class MainActivity : ComponentActivity() {
                     onPurchaseCredits = ::purchaseCredits,
                     onRestorePurchases = ::restorePurchases,
                     onRequestPush = ::requestPushPermission,
+                    onDisablePush = ::disablePush,
+                    onOpenNotificationSettings = ::openNotificationSettings,
                     onShareReceipt = ::shareReceipt,
                     onShareONE = ::shareONE,
                     onGoogle = ::googleIdentity,
@@ -64,6 +69,7 @@ class MainActivity : ComponentActivity() {
         }
         syncPushPermission()
         observePushRegistration()
+        observeNotificationClicks()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -95,13 +101,29 @@ class MainActivity : ComponentActivity() {
         val uri = intent?.data ?: return
         if (uri.scheme == "https" && uri.host == Uri.parse(BuildConfig.ONE_WEB_URL).host &&
             uri.path in listOf("", "/") && uri.getQueryParameter("challenge") == "1") {
-            // Always resolve the owner from the live server, not the untrusted URL label.
-            lifecycleScope.launch {
-                viewModel.world.collect { state ->
-                    if (state.connected) { viewModel.openChallenge(); throw kotlinx.coroutines.CancellationException() }
-                }
+            openLiveChallengeWhenConnected()
+        }
+    }
+
+    // Shared by the web share-challenge deep link and the dethroned push notification:
+    // both want to land straight on the take-the-screen action, not the home screen,
+    // but the live world state may still be loading on a cold launch.
+    private fun openLiveChallengeWhenConnected() {
+        lifecycleScope.launch {
+            viewModel.world.collect { state ->
+                if (state.connected) { viewModel.openChallenge(); throw kotlinx.coroutines.CancellationException() }
             }
         }
+    }
+
+    private fun observeNotificationClicks() {
+        if (BuildConfig.ONESIGNAL_APP_ID.isBlank()) return
+        OneSignal.Notifications.addClickListener(object : INotificationClickListener {
+            override fun onClick(event: INotificationClickEvent) {
+                val destination = event.notification.additionalData?.optString("destination")
+                if (destination == "revenge") openLiveChallengeWhenConnected()
+            }
+        })
     }
 
     override fun onResume() {
@@ -130,11 +152,28 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun syncPushPermission() {
-        val pushPermissionGranted =
-            BuildConfig.ONESIGNAL_APP_ID.isNotBlank() && OneSignal.Notifications.permission
-        if (pushPermissionGranted) OneSignal.User.pushSubscription.optIn()
-        viewModel.syncPushPermission(
-            pushPermissionGranted,
+        if (BuildConfig.ONESIGNAL_APP_ID.isBlank()) {
+            viewModel.syncPushPermission(false, false)
+            return
+        }
+        val granted = OneSignal.Notifications.permission
+        if (granted) OneSignal.User.pushSubscription.optIn()
+        // canRequestPermission is false once Android has permanently denied the
+        // system dialog (two denials, or "don't ask again") - at that point the
+        // in-app toggle is powerless and the only real fix is Android's own
+        // per-app notification settings.
+        val blocked = !granted && !OneSignal.Notifications.canRequestPermission
+        viewModel.syncPushPermission(granted, blocked)
+    }
+
+    private fun disablePush() {
+        if (BuildConfig.ONESIGNAL_APP_ID.isNotBlank()) OneSignal.User.pushSubscription.optOut()
+    }
+
+    private fun openNotificationSettings() {
+        startActivity(
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
         )
     }
 

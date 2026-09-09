@@ -62,7 +62,12 @@ Deno.serve(async (request) => {
   const apiKey = Deno.env.get("ONESIGNAL_REST_API_KEY") ?? "";
   if (!appId || !apiKey) return Response.json({ ok: true, configured: false });
 
-  const summary = `${newHandle || "Someone"} stole ONE after ${reignSeconds}s and ${verifiedViews} verified views. Take it back.`;
+  // The emotional window to react to a takeover is short, so the copy names the
+  // thief directly instead of a generic "you've been dethroned" - that's the
+  // difference between a push someone opens and one they swipe away.
+  const handle = newHandle || "Someone";
+  const peopleCount = verifiedViews.toLocaleString("en-US");
+  const peopleWord = verifiedViews === 1 ? "person" : "people";
   const response = await fetch("https://api.onesignal.com/notifications", {
     method: "POST",
     headers: {
@@ -73,8 +78,13 @@ Deno.serve(async (request) => {
       app_id: appId,
       include_aliases: { external_id: [previousOwnerId] },
       target_channel: "push",
-      headings: { en: "ONE WAS TAKEN" },
-      contents: { en: summary },
+      // Collapses repeated notifications from the same thief into one, so a war
+      // (dethroned a dozen times in an hour) doesn't spam the tray - the device
+      // only ever shows the latest.
+      android_group: `dethroned-${previousOwnerId}`,
+      collapse_id: `dethroned-${previousOwnerId}`,
+      headings: { en: `${handle} TOOK ONE FROM YOU` },
+      contents: { en: `${peopleCount} ${peopleWord} saw your words. Take it back →` },
       data: {
         destination: "revenge",
         new_owner_handle: newHandle,
@@ -84,8 +94,13 @@ Deno.serve(async (request) => {
     }),
   });
 
+  // OneSignal can return HTTP 200 even when it matched zero devices (e.g. the
+  // account never registered a push subscription) - surface the real body
+  // instead of collapsing every 2xx into a bare {ok:true}, so this is
+  // debuggable from net._http_response instead of guessing blind.
+  const onesignalResult = await response.json().catch(() => null);
   if (!response.ok) {
-    return new Response(await response.text(), { status: 502 });
+    return Response.json({ ok: false, onesignal_status: response.status, onesignal_result: onesignalResult }, { status: 502 });
   }
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, onesignal_result: onesignalResult });
 });

@@ -85,6 +85,8 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                                 handleError = null,
                                 handleSaving = false,
                                 handleAfterFirstWin = false,
+                                pendingPushPrompt = false,
+                                pushPromptVisible = current.pendingPushPrompt,
                                 toast = "${event.handle} IS NOW LIVE",
                             )
                         }
@@ -225,6 +227,7 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                     delay(2_100)
+                    val promptForPush = shouldPromptForPush()
                     if (shouldPromptForHandle()) {
                         _ui.update {
                             it.copy(
@@ -233,10 +236,11 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                                 handleError = null,
                                 handleSaving = false,
                                 handleAfterFirstWin = true,
+                                pendingPushPrompt = promptForPush,
                             )
                         }
                     } else {
-                        _ui.update { it.copy(overlay = Overlay.RECEIPT) }
+                        _ui.update { it.copy(overlay = Overlay.RECEIPT, pushPromptVisible = promptForPush) }
                     }
                 }
                 is ChallengeResult.Failure -> _ui.update {
@@ -560,6 +564,32 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // Asking for notification permission on first launch is a cold, generic ask that
+    // Android 13+ users tend to deny out of habit. Right after a first win, the reason
+    // is obvious - so this is the one moment worth interrupting for, and only once.
+    private fun shouldPromptForPush(): Boolean {
+        if (BuildConfig.ONESIGNAL_APP_ID.isBlank() || _ui.value.pushEnabled) return false
+        val userId = world.value.currentUserId
+        if (userId.isBlank()) return false
+        return !profilePreferences.getBoolean("push_prompt_seen_$userId", false)
+    }
+
+    private fun markPushPromptSeen() {
+        val userId = world.value.currentUserId
+        if (userId.isNotBlank()) profilePreferences.edit().putBoolean("push_prompt_seen_$userId", true).apply()
+    }
+
+    fun dismissPushPrompt() {
+        markPushPromptSeen()
+        _ui.update { it.copy(pushPromptVisible = false) }
+    }
+
+    fun acceptPushPrompt(onRequestPermission: ((Boolean) -> Unit) -> Unit) {
+        markPushPromptSeen()
+        _ui.update { it.copy(pushPromptVisible = false) }
+        enablePush(onRequestPermission)
+    }
+
     fun enablePush(onRequestPermission: ((Boolean) -> Unit) -> Unit) {
         onRequestPermission { granted ->
             _ui.update {
@@ -575,8 +605,28 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun syncPushPermission(enabled: Boolean) {
-        _ui.update { it.copy(pushEnabled = enabled) }
+    // A single click target for the REVENGE ALERTS card, since its meaning
+    // depends on current state: still-off means ask for permission, already-on
+    // means actually turn it off (previously this always tried to turn it on),
+    // and OS-blocked means the toggle physically can't do anything - only
+    // Android's own settings can, so send them there instead of a dead tap.
+    fun toggleRevengeAlerts(
+        onRequestPermission: ((Boolean) -> Unit) -> Unit,
+        onDisablePush: () -> Unit,
+        onOpenNotificationSettings: () -> Unit,
+    ) {
+        when {
+            _ui.value.pushBlocked -> onOpenNotificationSettings()
+            _ui.value.pushEnabled -> {
+                onDisablePush()
+                _ui.update { it.copy(pushEnabled = false, toast = "REVENGE ALERTS OFF") }
+            }
+            else -> enablePush(onRequestPermission)
+        }
+    }
+
+    fun syncPushPermission(enabled: Boolean, blocked: Boolean = false) {
+        _ui.update { it.copy(pushEnabled = enabled, pushBlocked = blocked) }
     }
 
     fun syncPushRegistration(registered: Boolean) {
@@ -595,10 +645,9 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         _ui.update { it.copy(revengeBanner = null) }
     }
 
-    fun openLastReceipt() {
-        if (_ui.value.receipt != null) {
-            _ui.update { it.copy(overlay = Overlay.RECEIPT, revengeBanner = null) }
-        }
+    fun takeItBack() {
+        _ui.update { it.copy(revengeBanner = null) }
+        openChallenge()
     }
 
     override fun onCleared() {

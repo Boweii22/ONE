@@ -30,8 +30,8 @@ android {
         applicationId = "com.tomribowei.one"
         minSdk = 26
         targetSdk = 36
-        versionCode = 30
-        versionName = "1.0.20"
+        versionCode = 36
+        versionName = "1.0.26"
         buildConfigField("String", "ADMOB_REWARDED_UNIT_ID", "\"" + onePublicValue("ADMOB_REWARDED_UNIT_ID") + "\"")
         manifestPlaceholders["admobAppId"] = onePublicValue("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
 
