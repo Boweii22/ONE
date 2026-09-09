@@ -11,7 +11,8 @@ interface OneRepository {
     val world: StateFlow<WorldState>
     val events: SharedFlow<OneEvent>
 
-    suspend fun challenge(messageId: String, onPhase: (ChallengePhase, String) -> Unit): ChallengeResult
+    suspend fun challenge(messageId: String, requestId: String, onPhase: (ChallengePhase, String) -> Unit): ChallengeResult
+    suspend fun forceRefresh()
     suspend fun submitMessage(text: String)
     suspend fun deleteMessage(id: String)
     suspend fun grantAdReward()

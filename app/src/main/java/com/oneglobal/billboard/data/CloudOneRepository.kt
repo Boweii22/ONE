@@ -51,6 +51,7 @@ class CloudOneRepository(context: Context) : OneRepository {
     private val preferences = appContext.getSharedPreferences("one_cloud_session", Context.MODE_PRIVATE)
     private var pollJob: Job? = null
     private var heartbeatJob: Job? = null
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
     private var hallRefreshAt = 0L
     private var cachedHallToday: List<HallEntry> = emptyList()
     private var cachedHallAllTime: List<HallEntry> = emptyList()
@@ -82,6 +83,40 @@ class CloudOneRepository(context: Context) : OneRepository {
                 delay(8_000)
             }
         }
+        registerNetworkCallback()
+    }
+
+    // ConnectivityManager reacts to a dropped/invalid network far faster than
+    // waiting for the next poll to time out - "connected but no reachable
+    // backend" (wifi with no real internet) is exactly what NET_CAPABILITY_VALIDATED
+    // exists to detect. Only used to fast-path the DOWN signal; coming back up
+    // is left to the poll actually succeeding again, so a flaky reconnect that
+    // immediately fails again doesn't flash "online" for a moment.
+    private fun registerNetworkCallback() {
+        if (networkCallback != null) return
+        val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onLost(network: android.net.Network) = markDisconnected()
+            override fun onUnavailable() = markDisconnected()
+            override fun onCapabilitiesChanged(network: android.net.Network, capabilities: android.net.NetworkCapabilities) {
+                if (!capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) markDisconnected()
+            }
+        }
+        runCatching {
+            manager.registerDefaultNetworkCallback(callback)
+            networkCallback = callback
+        }
+    }
+
+    private fun unregisterNetworkCallback() {
+        val callback = networkCallback ?: return
+        val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        runCatching { manager?.unregisterNetworkCallback(callback) }
+        networkCallback = null
+    }
+
+    override suspend fun forceRefresh() {
+        runCatching { refreshWorld() }.onFailure { markDisconnected() }
     }
 
     override fun stop() {
@@ -89,10 +124,12 @@ class CloudOneRepository(context: Context) : OneRepository {
         heartbeatJob?.cancel()
         pollJob = null
         heartbeatJob = null
+        unregisterNetworkCallback()
     }
 
     override suspend fun challenge(
         messageId: String,
+        requestId: String,
         onPhase: (ChallengePhase, String) -> Unit,
     ): ChallengeResult {
         val before = _world.value
@@ -100,7 +137,6 @@ class CloudOneRepository(context: Context) : OneRepository {
             ?: return ChallengeResult.Failure("Choose an approved message first.")
         return runCatching {
             onPhase(ChallengePhase.RESERVING, "LOCKING THE CURRENT REIGN")
-            val requestId = UUID.randomUUID().toString()
             onPhase(ChallengePhase.VERIFYING, "CHECKING MESSAGE + COOLDOWN")
             if (before.cooldownRemainingSeconds > 0) {
                 onPhase(ChallengePhase.SPENDING, "VERIFYING 1 ONE CREDIT")
@@ -133,7 +169,11 @@ class CloudOneRepository(context: Context) : OneRepository {
             _events.emit(OneEvent.TakeoverWon(receipt))
             ChallengeResult.Success(receipt)
         }.getOrElse { error ->
-            ChallengeResult.Failure(error.userMessage())
+            // A definitive server answer (ApiException) is not retryable - the
+            // server has spoken. Anything else (timeout, dropped connection)
+            // might have actually landed, so the caller should retry with the
+            // same request id rather than risk a duplicate with a fresh one.
+            ChallengeResult.Failure(error.userMessage(), retryable = error !is ApiException)
         }
     }
 
@@ -364,6 +404,7 @@ class CloudOneRepository(context: Context) : OneRepository {
             hallToday = cachedHallToday,
             hallAllTime = cachedHallAllTime,
             hallAllTimeLive = hallAllTimeLive,
+            lastConnectedAtMillis = now,
         )
         _world.value = next
         if (

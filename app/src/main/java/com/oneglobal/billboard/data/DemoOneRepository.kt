@@ -159,8 +159,13 @@ class DemoOneRepository : OneRepository {
         tickerJob = null
     }
 
+    override suspend fun forceRefresh() {
+        // Demo mode has no real network to lose; nothing to do.
+    }
+
     override suspend fun challenge(
         messageId: String,
+        requestId: String,
         onPhase: (ChallengePhase, String) -> Unit,
     ): ChallengeResult = auctionMutex.withLock {
         val before = _world.value

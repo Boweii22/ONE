@@ -155,6 +155,7 @@ data class WorldState(
     val userLongestReign: Int? = null,
     val userVerifiedViews: Int? = null,
     val blockedAccounts: List<BlockedAccount> = emptyList(),
+    val lastConnectedAtMillis: Long = System.currentTimeMillis(),
 )
 
 data class BlockedAccount(val id: String, val handle: String)
@@ -195,6 +196,8 @@ data class OneUiState(
     val identityError: String? = null,
     val profileBusy: Boolean = false,
     val howToPlayOnLaunch: Boolean = false,
+    val offlineVisible: Boolean = false,
+    val reconnecting: Boolean = false,
 )
 
 sealed interface OneEvent {
@@ -216,5 +219,9 @@ sealed interface OneEvent {
 
 sealed interface ChallengeResult {
     data class Success(val receipt: ReignReceipt) : ChallengeResult
-    data class Failure(val reason: String) : ChallengeResult
+    // retryable marks a failure that looks like a connectivity/timeout problem
+    // rather than a definitive server answer - the caller should reuse the same
+    // idempotency key on retry instead of minting a new one, so a request that
+    // actually landed server-side can't be double-applied by a retry.
+    data class Failure(val reason: String, val retryable: Boolean = false) : ChallengeResult
 }

@@ -34,6 +34,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -64,6 +65,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -118,6 +120,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.oneglobal.billboard.OneViewModel
 import com.oneglobal.billboard.R
@@ -187,7 +190,10 @@ fun OneApp(
         if (ui.takeoverPulse > 0) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
     }
     LaunchedEffect(world.currentUserId, oneSignalReady, revenueCatReady) {
-        if (world.currentUserId.isNotBlank()) onIdentifyUser(world.currentUserId)
+        if (world.currentUserId.isNotBlank()) {
+            onIdentifyUser(world.currentUserId)
+            viewModel.maybePromptHandleOnOpen()
+        }
     }
     LaunchedEffect(ui.revengeBanner) {
         if (ui.revengeBanner != null) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -229,6 +235,9 @@ fun OneApp(
                         }
                     },
                     onUnblockCurrentOwner = { viewModel.unblockOne(world.reign.owner.id) },
+                    offline = ui.offlineVisible,
+                    reconnecting = ui.reconnecting,
+                    onReconnect = viewModel::reconnect,
                 )
                 MainTab.LIBRARY -> LibraryScreen(
                     world = world,
@@ -239,8 +248,17 @@ fun OneApp(
                         viewModel.openChallenge()
                     },
                     onDelete = viewModel::deleteMessage,
+                    offline = ui.offlineVisible,
+                    reconnecting = ui.reconnecting,
+                    onReconnect = viewModel::reconnect,
                 )
-                MainTab.HALL -> HallScreen(world, onTakeIt = { viewModel.selectTab(MainTab.LIVE) })
+                MainTab.HALL -> HallScreen(
+                    world,
+                    onTakeIt = { viewModel.selectTab(MainTab.LIVE) },
+                    offline = ui.offlineVisible,
+                    reconnecting = ui.reconnecting,
+                    onReconnect = viewModel::reconnect,
+                )
                 MainTab.YOU -> YouScreen(
                     world = world,
                     ui = ui,
@@ -507,6 +525,9 @@ private fun LiveScreen(
     onReact: (String) -> Unit,
     onEcho: () -> Unit,
     onUnblockCurrentOwner: () -> Unit,
+    offline: Boolean,
+    reconnecting: Boolean,
+    onReconnect: () -> Unit,
 ) {
     val accent = palette(world.reign.palette)
     val isOwner = world.reign.owner.id == world.currentUserId
@@ -546,6 +567,10 @@ private fun LiveScreen(
                     )
                 }
             }
+            if (offline) {
+                Spacer(Modifier.height(8.dp))
+                LastSeenTag(world.lastConnectedAtMillis)
+            }
             Box(Modifier.fillMaxWidth().padding(vertical = 17.dp).height(1.dp).background(Color.White.copy(alpha = .16f)))
             LiveMapMessageStage(
                 message = world.reign.message.text,
@@ -557,7 +582,7 @@ private fun LiveScreen(
             } else {
                 HiddenOwnerStage(accent, onUnblockCurrentOwner)
             }
-            ViewLedger(world, accent, protectedSeconds)
+            ViewLedger(world, accent, protectedSeconds, offline)
             Spacer(Modifier.height(12.dp))
             AuctionCard(
                 world = world,
@@ -565,9 +590,28 @@ private fun LiveScreen(
                 protectedSeconds = protectedSeconds,
                 isOwner = isOwner,
                 onPrimary = if (isOwner) onShareReign else onChallenge,
+                offline = offline,
             )
             Spacer(Modifier.height(14.dp))
             CrowdControls(world, onReact, onEcho)
+        }
+
+        if (offline) {
+            OfflineScrim(Modifier.matchParentSize())
+            OfflineStalledBar(Modifier.align(Alignment.TopCenter))
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 96.dp),
+            ) {
+                WaitingForConnectionPill()
+                Spacer(Modifier.height(10.dp))
+                OfflineCard(
+                    lastConnectedAtMillis = world.lastConnectedAtMillis,
+                    reconnecting = reconnecting,
+                    onReconnect = onReconnect,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }
@@ -630,6 +674,29 @@ private fun LiveMapMessageStage(
 
 private val messageStageSizeSteps = listOf(76.sp, 68.sp, 62.sp, 56.sp, 50.sp, 44.sp, 38.sp, 34.sp, 30.sp, 26.sp)
 
+// Same technique as MessageStage below, generalized: picks the largest size in
+// [sizeSteps] where the widest real word in [text] still fits the available
+// width, so real (variable-length) content never gets stuck at a size that's
+// too big for the device it's actually rendering on.
+@Composable
+private fun AutoFitMessageText(text: String, color: Color, sizeSteps: List<TextUnit>, modifier: Modifier = Modifier) {
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val words = remember(text) { text.split(Regex("\\s+")).filter { it.isNotEmpty() } }
+    BoxWithConstraints(modifier) {
+        val maxWidthPx = with(density) { maxWidth.toPx() }
+        val chosenSize = remember(words, maxWidthPx) {
+            sizeSteps.firstOrNull { candidate ->
+                if (maxWidthPx <= 0f || words.isEmpty()) return@firstOrNull true
+                val style = TextStyle(fontWeight = FontWeight.Black, fontSize = candidate)
+                val longestWordWidth = words.maxOf { word -> textMeasurer.measure(word, style, maxLines = 1, softWrap = false).size.width }
+                longestWordWidth <= maxWidthPx
+            } ?: sizeSteps.last()
+        }
+        Text(text, color = color, fontWeight = FontWeight.Black, fontSize = chosenSize, lineHeight = chosenSize * 1.15f)
+    }
+}
+
 @Composable
 private fun MessageStage(message: String, accent: Color) {
     val upper = message.uppercase()
@@ -668,7 +735,7 @@ private fun MessageStage(message: String, accent: Color) {
 }
 
 @Composable
-private fun ViewLedger(world: WorldState, accent: Color, protectedSeconds: Int) {
+private fun ViewLedger(world: WorldState, accent: Color, protectedSeconds: Int, offline: Boolean = false) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -678,12 +745,12 @@ private fun ViewLedger(world: WorldState, accent: Color, protectedSeconds: Int) 
             .padding(horizontal = 8.dp, vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LiveMetric("◉", "WATCHING NOW", formatNumber(world.liveWatchers), if (world.liveWatchers == 1) "PERSON" else "PEOPLE", accent, Modifier.weight(1f))
+        LiveMetric("◉", "WATCHING NOW", if (offline) "—" else formatNumber(world.liveWatchers), if (world.liveWatchers == 1) "PERSON" else "PEOPLE", accent, Modifier.weight(1f))
         Box(Modifier.width(1.dp).height(62.dp).background(Color.White.copy(alpha = .16f)))
         LiveMetric(
             "◷",
             if (protectedSeconds > 0) "PROTECTION" else "SCREEN STATUS",
-            if (protectedSeconds > 0) formatDuration(protectedSeconds.toLong()) else "LIVE",
+            if (offline) "—" else if (protectedSeconds > 0) formatDuration(protectedSeconds.toLong()) else "LIVE",
             if (protectedSeconds > 0) "MIN : SEC" else "OPEN TO TAKE",
             accent,
             Modifier.weight(1f),
@@ -749,6 +816,7 @@ private fun AuctionCard(
     protectedSeconds: Int,
     isOwner: Boolean,
     onPrimary: () -> Unit,
+    offline: Boolean = false,
 ) {
     val cooldown = world.cooldownRemainingSeconds
     val canRevenge = cooldown > 0 && world.credits > 0
@@ -757,7 +825,7 @@ private fun AuctionCard(
     Column(Modifier.fillMaxWidth().onGloballyPositioned { targets["TAKE"] = it.boundsInRoot() }) {
         Button(
             onClick = onPrimary,
-            enabled = isOwner || canTake,
+            enabled = !offline && (isOwner || canTake),
             modifier = Modifier.fillMaxWidth().height(58.dp),
             shape = RoundedCornerShape(6.dp),
             colors = ButtonDefaults.buttonColors(
@@ -769,6 +837,7 @@ private fun AuctionCard(
         ) {
             Text(
                 when {
+                    offline -> "⊘  OFFLINE — CAN'T TAKE THE SCREEN"
                     isOwner -> "⚡  BROADCAST YOUR REIGN"
                     protectedSeconds > 0 -> "TAKEOVER LANDS IN ${protectedSeconds}s"
                     cooldown == 0 -> "⚡  TAKE THE SCREEN"
@@ -782,7 +851,7 @@ private fun AuctionCard(
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            if (isOwner) "The world is watching your message." else "Challenge ${world.reign.owner.handle} to take ONE.",
+            if (offline) "Reconnect to challenge for ONE." else if (isOwner) "The world is watching your message." else "Challenge ${world.reign.owner.handle} to take ONE.",
             color = Muted,
             fontFamily = mono,
             fontSize = 12.sp,
@@ -799,7 +868,11 @@ private fun LibraryScreen(
     onCompose: () -> Unit,
     onDeploy: (String) -> Unit,
     onDelete: (String) -> Unit,
+    offline: Boolean,
+    reconnecting: Boolean,
+    onReconnect: () -> Unit,
 ) {
+    OfflineAware(offline, world.lastConnectedAtMillis, reconnecting, onReconnect) {
     Column(
         Modifier
             .fillMaxSize()
@@ -824,6 +897,7 @@ private fun LibraryScreen(
         }
         Spacer(Modifier.height(6.dp))
         SafetyCard()
+    }
     }
 }
 
@@ -878,7 +952,7 @@ private fun MessageCard(message: OneMessage, selected: Boolean, onDeploy: () -> 
 }
 
 @Composable
-private fun HallScreen(world: WorldState, onTakeIt: () -> Unit) {
+private fun HallScreen(world: WorldState, onTakeIt: () -> Unit, offline: Boolean, reconnecting: Boolean, onReconnect: () -> Unit) {
     var period by rememberSaveable { mutableStateOf(HallPeriod.TODAY) }
     var sort by rememberSaveable { mutableStateOf(HallSort.VIEWS) }
     var showFull by rememberSaveable { mutableStateOf(false) }
@@ -891,11 +965,18 @@ private fun HallScreen(world: WorldState, onTakeIt: () -> Unit) {
     // "Today's winning message" is the actual champion (server rank 1), independent
     // of whichever column the viewer is currently sorting by.
     val champion = today.firstOrNull { it.rank == 1 } ?: today.firstOrNull()
-    val currentUserRank = sortedEntries.indexOfFirst { it.owner.id == world.currentUserId }
-    val gapToNextRank = if (currentUserRank > 0) {
-        sortedEntries[currentUserRank - 1].metricFor(sort) - sortedEntries[currentUserRank].metricFor(sort)
+    // Compared against whatever row is actually rendered directly above the
+    // player, not their true numeric neighbor in sortedEntries - in the
+    // collapsed view those can be different rows (the true neighbor might be
+    // hidden), and showing a number that doesn't match the row above it reads
+    // as broken.
+    val currentUserVisibleIndex = visibleEntries.indexOfFirst { it.owner.id == world.currentUserId }
+    val rankAbove = visibleEntries.getOrNull(currentUserVisibleIndex - 1)
+    val gapToNextRank = if (currentUserVisibleIndex > 0 && rankAbove != null) {
+        rankAbove.metricFor(sort) - visibleEntries[currentUserVisibleIndex].metricFor(sort)
     } else null
 
+    OfflineAware(offline, world.lastConnectedAtMillis, reconnecting, onReconnect) {
     Column(
         Modifier
             .fillMaxSize()
@@ -945,8 +1026,8 @@ private fun HallScreen(world: WorldState, onTakeIt: () -> Unit) {
                             Spacer(Modifier.height(if (isCurrentUser) 12.dp else 4.dp))
                         }
                     }
-                    if (gapToNextRank != null && gapToNextRank > 0) {
-                        HallGapCard(gapToNextRank, sort, onTakeIt)
+                    if (gapToNextRank != null && gapToNextRank > 0 && rankAbove != null) {
+                        HallGapCard(gapToNextRank, rankAbove.owner.handle, sort, onTakeIt)
                         Spacer(Modifier.height(18.dp))
                     }
                 }
@@ -962,6 +1043,7 @@ private fun HallScreen(world: WorldState, onTakeIt: () -> Unit) {
             Text(if (showFull) "COLLAPSE LEADERBOARD  ↑" else "VIEW FULL LEADERBOARD  ↓", color = if (showFull) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
         }
         Text("◇ ${sortedEntries.size} VERIFIED REIGNS // ${if (selectedPeriodIsLive) "UPDATED LIVE" else "SERVER UPDATE REQUIRED"}", color = Muted, fontFamily = mono, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
+    }
     }
 }
 
@@ -1030,7 +1112,7 @@ private fun HallChampionCard(entry: HallEntry) {
             Text("TODAY'S WINNING MESSAGE", color = Acid, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp)
         }
         Spacer(Modifier.height(10.dp))
-        Text("“${entry.message}”", color = Paper, fontWeight = FontWeight.Black, fontSize = 17.sp, lineHeight = 21.sp)
+        AutoFitMessageText("“${entry.message}”", Paper, listOf(17.sp, 15.sp, 13.sp, 12.sp), Modifier.fillMaxWidth())
         Text("— ${entry.owner.handle}", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -1047,7 +1129,7 @@ private fun HallChampionCard(entry: HallEntry) {
 }
 
 @Composable
-private fun HallGapCard(gap: Int, sort: HallSort, onTakeIt: () -> Unit) {
+private fun HallGapCard(gap: Int, chasingHandle: String, sort: HallSort, onTakeIt: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -1059,7 +1141,7 @@ private fun HallGapCard(gap: Int, sort: HallSort, onTakeIt: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column {
-            Text("YOU'RE RANKING", color = Muted, fontFamily = mono, fontSize = 10.sp, letterSpacing = .8.sp)
+            Text("CHASING $chasingHandle", color = Muted, fontFamily = mono, fontSize = 10.sp, letterSpacing = .8.sp)
             Text(formatMetricGap(gap, sort), color = Paper, fontWeight = FontWeight.Black, fontSize = 13.sp)
         }
         Surface(color = Acid, shape = RoundedCornerShape(6.dp), modifier = Modifier.clickable(onClick = onTakeIt)) {
@@ -1710,7 +1792,7 @@ private fun ReceiptOverlay(
             Spacer(Modifier.height(20.dp))
             Text("YOUR LIVE MESSAGE", color = Muted, fontFamily = mono, fontSize = 12.sp, letterSpacing = .8.sp)
             Box(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).background(InkRaised).border(1.dp, Acid.copy(alpha = .65f), RoundedCornerShape(8.dp)).padding(17.dp)) {
-                Text(resolved.message, color = Paper, fontWeight = FontWeight.Black, fontSize = 20.sp, lineHeight = 23.sp)
+                AutoFitMessageText(resolved.message, Paper, listOf(20.sp, 18.sp, 16.sp, 14.sp), Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = .34f)).border(1.dp, Color.White.copy(alpha = .15f), RoundedCornerShape(8.dp)).padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -2311,25 +2393,6 @@ private fun SelectableMessage(message: OneMessage, selected: Boolean, onClick: (
 }
 
 @Composable
-private fun HallHero(entry: HallEntry) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(Brush.linearGradient(listOf(Acid, Color(0xFFB9E800)))).padding(20.dp)) {
-        Column {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("#01 // TODAY", color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
-                Text(formatDuration(entry.reignSeconds.toLong()), color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
-            }
-            Spacer(Modifier.height(26.dp))
-            Text("“${entry.message}”", color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 27.sp, lineHeight = 29.sp)
-            Spacer(Modifier.height(23.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(entry.owner.handle, color = Ink, fontWeight = FontWeight.Black, fontSize = 15.sp)
-                Text("${formatNumber(entry.verifiedViews)} VIEWS", color = Ink.copy(alpha = .7f), fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            }
-        }
-    }
-}
-
-@Composable
 private fun HallRow(entry: HallEntry, sort: HallSort, isCurrentUser: Boolean, emphasized: Boolean) {
     val rankColor = when (entry.rank) { 1 -> Acid; 2 -> Ice; 3 -> Orange; else -> Muted }
     val podium = entry.rank in 1..3
@@ -2350,6 +2413,7 @@ private fun HallRow(entry: HallEntry, sort: HallSort, isCurrentUser: Boolean, em
                 Text(entry.owner.locationLabel(), color = Ink.copy(alpha = .7f), fontFamily = mono, fontSize = 11.sp)
             }
             Text(entry.metricLabelFor(sort), color = Ink, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 15.sp)
+            RankMovement(Ink.copy(alpha = .55f))
         }
         return
     }
@@ -2376,7 +2440,17 @@ private fun HallRow(entry: HallEntry, sort: HallSort, isCurrentUser: Boolean, em
             Text(entry.owner.locationLabel(), color = Muted, fontFamily = mono, fontSize = 11.sp)
         }
         Text(entry.metricLabelFor(sort), color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = if (emphasized) 15.sp else 13.sp)
+        RankMovement(Muted)
     }
+}
+
+// Real rank-history (who moved up or down since last time) isn't tracked
+// anywhere yet, so this is honestly a placeholder, not a claim of "no
+// change" - a blank cell here reads as a rendering bug, so every row gets
+// a neutral dash until real movement tracking exists to back real arrows.
+@Composable
+private fun RankMovement(color: Color) {
+    Text("—", color = color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, modifier = Modifier.width(16.dp), textAlign = TextAlign.Center)
 }
 
 @Composable
@@ -2592,6 +2666,165 @@ private fun PushPermissionPrompt(onAccept: () -> Unit, onDismiss: () -> Unit) {
         confirmButton = { TextButton(onClick = onAccept) { Text("Yes, alert me") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Not now") } },
     )
+}
+
+// Minutes elapsed since [sinceMillis], ticking live once a second. Shared by
+// every offline-state element that needs to say "X minutes ago" in sync.
+@Composable
+private fun rememberElapsedMinutes(sinceMillis: Long): Int {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(sinceMillis) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
+    return ((now - sinceMillis) / 60_000L).toInt().coerceAtLeast(0)
+}
+
+@Composable
+private fun OfflineScrim(modifier: Modifier = Modifier) {
+    // Nothing under the scrim should be reachable while offline - a click
+    // handler with no visual feedback swallows every touch that would
+    // otherwise fall through to the (still-rendered) live content beneath it.
+    Box(
+        modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = .74f))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+    )
+}
+
+@Composable
+private fun OfflineStalledBar(modifier: Modifier = Modifier) {
+    LinearProgressIndicator(
+        modifier = modifier.fillMaxWidth().height(3.dp),
+        color = Orange,
+        trackColor = Orange.copy(alpha = .16f),
+    )
+}
+
+@Composable
+private fun LastSeenTag(lastConnectedAtMillis: Long, modifier: Modifier = Modifier) {
+    val minutes = rememberElapsedMinutes(lastConnectedAtMillis)
+    Surface(
+        color = Orange.copy(alpha = .16f),
+        border = BorderStroke(1.dp, Orange.copy(alpha = .5f)),
+        shape = RoundedCornerShape(5.dp),
+        modifier = modifier,
+    ) {
+        Text(
+            if (minutes <= 0) "LAST SEEN JUST NOW" else "LAST SEEN $minutes MINUTE${if (minutes == 1) "" else "S"} AGO",
+            color = Orange,
+            fontFamily = mono,
+            fontWeight = FontWeight.Black,
+            fontSize = 11.sp,
+            letterSpacing = .5.sp,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+        )
+    }
+}
+
+@Composable
+private fun WaitingForConnectionPill(modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color.Black.copy(alpha = .55f))
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CircularProgressIndicator(color = Muted, strokeWidth = 1.5.dp, modifier = Modifier.size(12.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("WAITING FOR CONNECTION…", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = .4.sp)
+    }
+}
+
+// The bottom stack in every offline-state variant: a small waiting pill, then
+// the dark card - amber border, a dot + heading, the "last thing you saw"
+// body copy, and a full-width RECONNECT button that swaps its label for a
+// spinner while retrying.
+@Composable
+private fun OfflineCard(lastConnectedAtMillis: Long, reconnecting: Boolean, onReconnect: () -> Unit, modifier: Modifier = Modifier) {
+    val minutes = rememberElapsedMinutes(lastConnectedAtMillis)
+    val minutesLabel = if (minutes <= 0) "moments" else "$minutes minute${if (minutes == 1) "" else "s"}"
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(InkRaised)
+            .border(1.dp, Orange, RoundedCornerShape(10.dp))
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(Orange))
+            Spacer(Modifier.width(8.dp))
+            Text("You've gone offline", color = Orange, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 17.sp)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "This is the last thing you saw, $minutesLabel ago. It may already belong to someone else.",
+            color = Muted,
+            fontFamily = mono,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+        )
+        Spacer(Modifier.height(14.dp))
+        Button(
+            onClick = onReconnect,
+            enabled = !reconnecting,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Orange,
+                contentColor = Ink,
+                disabledContainerColor = Orange.copy(alpha = .6f),
+                disabledContentColor = Ink.copy(alpha = .8f),
+            ),
+            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+        ) {
+            if (reconnecting) {
+                CircularProgressIndicator(color = Ink, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+            } else {
+                Text("RECONNECT", fontWeight = FontWeight.Black, fontSize = 13.sp, letterSpacing = .5.sp)
+            }
+        }
+    }
+}
+
+// Wraps a whole screen's content with the offline treatment: content stays
+// rendered underneath (never swapped out for a placeholder - it's the last
+// real thing the viewer saw), a scrim dims it, a stalled bar sits at the very
+// top, and the reconnect card floats above the tab bar. Screens that need
+// more (Live's last-seen tag, disabled take button, em-dash stats) add those
+// inline themselves; this only owns the parts every screen shares.
+@Composable
+private fun OfflineAware(
+    offline: Boolean,
+    lastConnectedAtMillis: Long,
+    reconnecting: Boolean,
+    onReconnect: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Box(Modifier.fillMaxSize()) {
+        content()
+        if (offline) {
+            OfflineScrim(Modifier.matchParentSize())
+            OfflineStalledBar(Modifier.align(Alignment.TopCenter))
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 96.dp),
+            ) {
+                WaitingForConnectionPill()
+                Spacer(Modifier.height(10.dp))
+                OfflineCard(
+                    lastConnectedAtMillis = lastConnectedAtMillis,
+                    reconnecting = reconnecting,
+                    onReconnect = onReconnect,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
 }
 
 @Composable

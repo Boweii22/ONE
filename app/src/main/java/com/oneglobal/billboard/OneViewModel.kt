@@ -15,12 +15,16 @@ import com.oneglobal.billboard.model.MessageStatus
 import com.oneglobal.billboard.model.OneEvent
 import com.oneglobal.billboard.model.OneUiState
 import com.oneglobal.billboard.model.Overlay
+import java.util.UUID
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -72,7 +76,6 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                         it.copy(composeError = event.reason, toast = event.reason)
                     }
                     is OneEvent.HandleUpdated -> {
-                        markHandlePromptSeen()
                         _ui.update { current ->
                             val initials = event.handle.removePrefix("@").take(2)
                             val updatedReceipt = current.receipt?.let { receipt ->
@@ -149,6 +152,34 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+        // A momentary blip (a few seconds without a successful poll) is most of
+        // what "disconnected" actually looks like in practice, so the offline
+        // card only appears once the connection has stayed down continuously -
+        // going back online is applied immediately, no debounce needed there.
+        viewModelScope.launch {
+            world.map { it.connected }.distinctUntilChanged().collect { connected ->
+                offlineDebounceJob?.cancel()
+                if (connected) {
+                    _ui.update { it.copy(offlineVisible = false, reconnecting = false) }
+                } else {
+                    offlineDebounceJob = viewModelScope.launch {
+                        delay(2_500)
+                        _ui.update { it.copy(offlineVisible = true) }
+                    }
+                }
+            }
+        }
+    }
+
+    private var offlineDebounceJob: Job? = null
+
+    fun reconnect() {
+        if (_ui.value.reconnecting) return
+        _ui.update { it.copy(reconnecting = true) }
+        viewModelScope.launch {
+            repository.forceRefresh()
+            _ui.update { it.copy(reconnecting = false) }
+        }
     }
 
     fun selectTab(tab: MainTab) {
@@ -209,15 +240,26 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         _ui.update { it.copy(selectedMessageId = messageId) }
     }
 
+    // Kept alongside the message id it belongs to: a retryable failure (looks
+    // like a dropped connection, not a definitive server answer) reuses this
+    // same id so a retry can't double-take or double-charge a request that
+    // actually landed. Cleared on success, on a real rejection, or once the
+    // selection changes to a different message.
+    private var pendingChallengeRequestId: Pair<String, String>? = null
+
     fun beginChallenge() {
         if (_ui.value.challengePhase !in listOf(ChallengePhase.IDLE, ChallengePhase.FAILED)) return
+        if (!world.value.connected) return
         val messageId = _ui.value.selectedMessageId ?: return
+        val requestId = pendingChallengeRequestId?.takeIf { it.first == messageId }?.second
+            ?: UUID.randomUUID().toString().also { pendingChallengeRequestId = messageId to it }
         viewModelScope.launch {
-            val result = repository.challenge(messageId) { phase, status ->
+            val result = repository.challenge(messageId, requestId) { phase, status ->
                 _ui.update { it.copy(challengePhase = phase, challengeStatus = status) }
             }
             when (result) {
                 is ChallengeResult.Success -> {
+                    pendingChallengeRequestId = null
                     _ui.update {
                         it.copy(
                             challengePhase = ChallengePhase.WON,
@@ -243,12 +285,15 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                         _ui.update { it.copy(overlay = Overlay.RECEIPT, pushPromptVisible = promptForPush) }
                     }
                 }
-                is ChallengeResult.Failure -> _ui.update {
-                    it.copy(
-                        challengePhase = ChallengePhase.FAILED,
-                        challengeStatus = result.reason,
-                        toast = result.reason,
-                    )
+                is ChallengeResult.Failure -> {
+                    if (!result.retryable) pendingChallengeRequestId = null
+                    _ui.update {
+                        it.copy(
+                            challengePhase = ChallengePhase.FAILED,
+                            challengeStatus = result.reason,
+                            toast = result.reason,
+                        )
+                    }
                 }
             }
         }
@@ -363,7 +408,6 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissHandleEditor() {
         val afterFirstWin = _ui.value.handleAfterFirstWin
-        if (afterFirstWin) markHandlePromptSeen()
         _ui.update {
             it.copy(
                 overlay = if (afterFirstWin && it.receipt != null) Overlay.RECEIPT else Overlay.NONE,
@@ -659,16 +703,39 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         super.onCleared()
     }
 
+    // Whether to prompt is derived purely from the real handle, not a local
+    // "already asked" flag - a flag meant dismissing once suppressed the prompt
+    // forever, which is how real players ended up permanently stuck on
+    // @PLAYER_XXXXXX. As long as the handle is still a fallback, it can ask
+    // again - on the next win, and once per app open below.
     private fun shouldPromptForHandle(): Boolean {
         val user = world.value.currentUser ?: return false
-        if (!isFallbackHandle(user.handle)) return false
-        return !profilePreferences.getBoolean("handle_prompted_${user.id}", false)
-    }
-
-    private fun markHandlePromptSeen() {
-        val userId = world.value.currentUserId.takeIf { it.isNotBlank() } ?: return
-        profilePreferences.edit().putBoolean("handle_prompted_$userId", true).apply()
+        return isFallbackHandle(user.handle)
     }
 
     private fun isFallbackHandle(handle: String): Boolean = handle.startsWith("@PLAYER_")
+
+    private var handlePromptCheckedThisSession = false
+
+    // The other trigger: someone who won before, dismissed the prompt, and is
+    // still on a fallback handle should be asked again next time they open the
+    // app - not just on their next win, which might be a while away. Scoped to
+    // players who've already taken the screen at least once, so a brand-new
+    // account isn't asked to name itself before it's done anything.
+    fun maybePromptHandleOnOpen() {
+        if (handlePromptCheckedThisSession) return
+        handlePromptCheckedThisSession = true
+        if (_ui.value.overlay != Overlay.NONE) return
+        if ((world.value.userTakeovers ?: 0) <= 0) return
+        if (!shouldPromptForHandle()) return
+        _ui.update {
+            it.copy(
+                overlay = Overlay.HANDLE,
+                handleText = "",
+                handleError = null,
+                handleSaving = false,
+                handleAfterFirstWin = false,
+            )
+        }
+    }
 }
