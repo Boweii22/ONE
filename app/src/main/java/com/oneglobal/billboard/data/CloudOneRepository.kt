@@ -250,15 +250,21 @@ class CloudOneRepository(context: Context) : OneRepository {
     }
 
     override fun reportCurrentMessage(reason: String) {
+        // Mask on-device immediately so a slow connection doesn't leave a
+        // visible gap between tapping report and the message disappearing;
+        // reconciled with the real server state below either way.
+        _world.value = _world.value.copy(currentContentBlocked = true)
         scope.launch {
             runCatching { rpc("report_one", JSONObject().put("p_reason", reason), authenticated = true) }
                 .onSuccess {
-                    // The report itself is the confirmation. Refresh immediately so
-                    // this user's live screen is masked without another action.
                     refreshWorld()
                     _events.emit(OneEvent.Error("Reported. Hidden for you."))
                 }
-                .onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
+                .onFailure { error ->
+                    runCatching { refreshWorld() }
+                        .onFailure { _world.value = _world.value.copy(currentContentBlocked = false) }
+                    _events.emit(OneEvent.Error(error.userMessage()))
+                }
         }
     }
 

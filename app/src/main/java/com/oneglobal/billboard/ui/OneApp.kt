@@ -206,7 +206,7 @@ fun OneApp(
     }
 
     if (!ui.onboardingComplete) {
-        OnboardingScreen(onEnter = viewModel::completeOnboarding)
+        OnboardingScreen(world = world, onTakeIt = viewModel::completeOnboardingAndCompose)
         return
     }
 
@@ -455,56 +455,105 @@ private fun SplashScreen() {
     }
 }
 
+// Three cards, one build-up: a concept (one screen), a specific person
+// (whoever really holds it right now, pulled live), then the action itself.
+// Card 3's button doesn't end onboarding into an empty live screen - it's
+// the first real step of playing. A brand-new account has no approved
+// message yet, so that step is writing one, not attempting a take that has
+// nothing to submit.
 @Composable
-private fun OnboardingScreen(onEnter: () -> Unit) {
+private fun OnboardingScreen(world: WorldState, onTakeIt: () -> Unit) {
     var page by rememberSaveable { mutableStateOf(0) }
-    val pages = listOf(
-        OnboardingPage("01", "THE INTERNET\nHAS ONE SCREEN.", "One person owns it. Everyone watches. Anyone can take it.", "◉", Acid, "WATCH THE WORLD"),
-        OnboardingPage("02", "DON’T POST.\nTAKE CONTROL.", "Choose one approved message, enter the live race and become the only voice on ONE.", "ϟ", Orange, "TAKE THE SCREEN"),
-        OnboardingPage("03", "MAKE EVERY\nSECOND COUNT.", "Your reign, verified views and place in The Hall are recorded live for everyone.", "♛", Ice, "LEAVE A MARK"),
-    )
-    val item = pages[page]
+    val colors = listOf(Acid, Orange, Ice)
+    val color = colors[page]
+    val liveOwnerKnown = world.connected && world.reign.owner.id != "system"
+    val handle = world.reign.owner.handle
+
     Box(Modifier.fillMaxSize().background(Ink)) {
-        LiveField(item.color, Modifier.fillMaxSize())
+        LiveField(color, Modifier.fillMaxSize())
         Canvas(Modifier.fillMaxSize()) {
             repeat(7) { ring ->
-                drawCircle(item.color.copy(alpha = .035f), size.minDimension * (.18f + ring * .09f), Offset(size.width * .78f, size.height * .22f), style = Stroke(1f))
+                drawCircle(color.copy(alpha = .035f), size.minDimension * (.18f + ring * .09f), Offset(size.width * .78f, size.height * .22f), style = Stroke(1f))
             }
         }
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 22.dp, vertical = 17.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("ONE / FIRST ENTRY", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.sp)
-                Text("${page + 1} / ${pages.size}", color = item.color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                Text("${page + 1} / 3", color = color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
             }
             Spacer(Modifier.height(24.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                pages.indices.forEach { index ->
-                    Box(Modifier.weight(1f).height(3.dp).background(if (index <= page) item.color else Color.White.copy(alpha = .09f)))
+                repeat(3) { index ->
+                    Box(Modifier.weight(1f).height(3.dp).background(if (index <= page) color else Color.White.copy(alpha = .09f)))
                 }
             }
-            AnimatedContent(page, transitionSpec = { (fadeIn(tween(280)) + slideInVertically { it / 5 }) togetherWith (fadeOut(tween(180)) + slideOutVertically { -it / 5 }) }, label = "onboarding-page", modifier = Modifier.weight(1f)) {
+            AnimatedContent(page, transitionSpec = { (fadeIn(tween(280)) + slideInVertically { it / 5 }) togetherWith (fadeOut(tween(180)) + slideOutVertically { -it / 5 }) }, label = "onboarding-page", modifier = Modifier.weight(1f)) { shownPage ->
                 Column(Modifier.fillMaxSize()) {
                     Spacer(Modifier.weight(.45f))
-                    Box(Modifier.size(132.dp).clip(CircleShape).background(item.color).shadow(28.dp, CircleShape, spotColor = item.color.copy(alpha = .4f)), contentAlignment = Alignment.Center) {
-                        Text(item.icon, color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 54.sp)
+                    when (shownPage) {
+                        0 -> {
+                            Box(Modifier.size(132.dp).clip(CircleShape).background(color).shadow(28.dp, CircleShape, spotColor = color.copy(alpha = .4f)), contentAlignment = Alignment.Center) {
+                                Text("◉", color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 54.sp)
+                            }
+                            Spacer(Modifier.height(32.dp))
+                            Text("THERE IS\nONE SCREEN.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 39.sp, letterSpacing = (-1.8).sp)
+                            Text("Everyone using ONE sees the same message. There is no feed.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 15.dp, end = 24.dp))
+                        }
+                        1 -> {
+                            if (liveOwnerKnown) {
+                                ProfilePhoto(world.reign.owner, color, Modifier.size(132.dp).shadow(28.dp, CircleShape, spotColor = color.copy(alpha = .4f)))
+                            } else {
+                                Box(Modifier.size(132.dp).clip(CircleShape).background(color.copy(alpha = .3f)), contentAlignment = Alignment.Center) {
+                                    Text("…", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 40.sp)
+                                }
+                            }
+                            Spacer(Modifier.height(32.dp))
+                            Text(
+                                if (liveOwnerKnown) "$handle\nOWNS IT RIGHT NOW." else "SOMEONE OWNS\nIT RIGHT NOW.",
+                                color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 39.sp, lineHeight = 37.sp, letterSpacing = (-1.5).sp,
+                            )
+                            Text("One person holds it at a time. Everyone else is looking at their words.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 15.dp, end = 24.dp))
+                            if (liveOwnerKnown) {
+                                Text(
+                                    "“${world.reign.message.text}”",
+                                    color = color, fontWeight = FontWeight.Black, fontSize = 15.sp, lineHeight = 19.sp,
+                                    modifier = Modifier.padding(top = 14.dp, end = 24.dp),
+                                )
+                            }
+                        }
+                        else -> {
+                            Box(Modifier.size(132.dp).clip(CircleShape).background(color).shadow(28.dp, CircleShape, spotColor = color.copy(alpha = .4f)), contentAlignment = Alignment.Center) {
+                                Text("ϟ", color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 54.sp)
+                            }
+                            Spacer(Modifier.height(32.dp))
+                            Text("SO TAKE\nIT OFF THEM.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 39.sp, letterSpacing = (-1.8).sp)
+                            Text("Your words go up instead. Then someone takes it off you, and you take it back.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 15.dp, end = 24.dp))
+                        }
                     }
-                    Spacer(Modifier.height(32.dp))
-                    Text(item.eyebrow, color = item.color, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.6.sp)
-                    Text(item.title, color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 39.sp, letterSpacing = (-1.8).sp, modifier = Modifier.padding(top = 9.dp))
-                    Text(item.body, color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 15.dp, end = 24.dp))
                     Spacer(Modifier.weight(.35f))
                 }
             }
-            Button(onClick = { if (page < pages.lastIndex) page++ else onEnter() }, modifier = Modifier.fillMaxWidth().height(62.dp), colors = ButtonDefaults.buttonColors(containerColor = item.color, contentColor = Ink), shape = RoundedCornerShape(6.dp)) {
-                Text(if (page == pages.lastIndex) "ENTER THE LIVE WORLD  →" else "CONTINUE  →", fontWeight = FontWeight.Black, fontSize = 13.sp)
+            Button(
+                onClick = { if (page < 2) page++ else onTakeIt() },
+                modifier = Modifier.fillMaxWidth().height(62.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = Ink),
+                shape = RoundedCornerShape(6.dp),
+            ) {
+                Text(
+                    when {
+                        page < 2 -> "CONTINUE  →"
+                        liveOwnerKnown -> "TAKE IT FROM $handle  →"
+                        else -> "TAKE IT  →"
+                    },
+                    fontWeight = FontWeight.Black,
+                    fontSize = 13.sp,
+                )
             }
             if (page > 0) Text("BACK", color = Muted, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().clickable { page-- }.padding(13.dp))
             else Spacer(Modifier.height(34.dp))
         }
     }
 }
-
-private data class OnboardingPage(val number: String, val title: String, val body: String, val icon: String, val color: Color, val eyebrow: String)
 
 @Composable
 private fun OnboardingStep(index: String, icon: String, label: String) {

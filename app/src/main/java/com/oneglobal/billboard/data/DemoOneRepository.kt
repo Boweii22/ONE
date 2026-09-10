@@ -366,7 +366,8 @@ class DemoOneRepository : OneRepository {
     }
 
     override fun reportCurrentMessage(reason: String) {
-        _events.tryEmit(OneEvent.Error("Report received: $reason."))
+        _world.update { it.copy(currentContentBlocked = true) }
+        _events.tryEmit(OneEvent.Error("Reported. Hidden for you."))
     }
 
     override suspend fun blockCurrentOwner() {

@@ -218,6 +218,14 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         _ui.update { it.copy(onboardingComplete = true) }
     }
 
+    // Onboarding's last card ends on the take action itself, not a passive
+    // "you're in" screen - but a brand-new account has no approved message
+    // yet, so the actual first step of playing is writing one.
+    fun completeOnboardingAndCompose() {
+        completeOnboarding()
+        openCompose()
+    }
+
     fun setHowToPlayOnLaunch(enabled: Boolean) {
         profilePreferences.edit().putBoolean("how_to_play_on_launch", enabled).apply()
         _ui.update { it.copy(howToPlayOnLaunch = enabled) }
