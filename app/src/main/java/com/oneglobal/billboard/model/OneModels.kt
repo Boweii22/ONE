@@ -138,7 +138,11 @@ data class WorldState(
     val demoMode: Boolean = true,
     val currentUserId: String = "user_bowei",
     val currentUser: OneOwner? = null,
-    val cooldownRemainingSeconds: Int = 0,
+    val takeBalance: Int = 2,
+    val takeBalanceCap: Int = 2,
+    val takeRefillSeconds: Int = 0,
+    val takeAdBypassesRemainingToday: Int = 2,
+    val takeBypassCreditCost: Int = 1,
     val takeoversToday: Int = 0,
     val activity: List<TakeoverActivity> = emptyList(),
     val reactions: List<CrowdReaction> = emptyList(),
@@ -149,8 +153,6 @@ data class WorldState(
     val hallAllTimeLive: Boolean = false,
     val reactionCounts: Map<String, Int>? = null,
     val myReactions: Set<String> = emptySet(),
-    val adSkipAvailable: Boolean = false,
-    val adSkipsRemainingToday: Int = 3,
     val userTakeovers: Int? = null,
     val userLongestReign: Int? = null,
     val userVerifiedViews: Int? = null,
@@ -211,7 +213,7 @@ sealed interface OneEvent {
     data class IdentityRecovered(val handle: String) : OneEvent
     data class IdentityRejected(val reason: String) : OneEvent
     data class CreditsGranted(val amount: Int, val source: String) : OneEvent
-    data class AdSkipGranted(val remainingToday: Int) : OneEvent
+    data class TakeRefillBypassed(val method: String) : OneEvent
     data object FeedbackSubmitted : OneEvent
     data object AccountDeleted : OneEvent
     data class Error(val message: String) : OneEvent

@@ -137,12 +137,8 @@ class CloudOneRepository(context: Context) : OneRepository {
             ?: return ChallengeResult.Failure("Choose an approved message first.")
         return runCatching {
             onPhase(ChallengePhase.RESERVING, "LOCKING THE CURRENT REIGN")
-            onPhase(ChallengePhase.VERIFYING, "CHECKING MESSAGE + COOLDOWN")
-            if (before.cooldownRemainingSeconds > 0) {
-                onPhase(ChallengePhase.SPENDING, "VERIFYING 1 ONE CREDIT")
-            } else {
-                onPhase(ChallengePhase.SPENDING, "FREE TAKEOVER // NOTHING TO SPEND")
-            }
+            onPhase(ChallengePhase.VERIFYING, "CHECKING MESSAGE + TAKE BALANCE")
+            onPhase(ChallengePhase.SPENDING, "SPENDING A TAKE")
             val result = rpc(
                 "take_one",
                 JSONObject()
@@ -217,13 +213,16 @@ class CloudOneRepository(context: Context) : OneRepository {
         }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
     }
 
-    override suspend fun grantAdReward() {
+    override suspend fun bypassTakeRefill(method: String, requestId: String) {
         runCatching {
-            val requestId = UUID.randomUUID().toString()
-            val result = rpc("grant_ad_skip", JSONObject().put("p_request_id", requestId), authenticated = true)
+            val result = rpc(
+                "bypass_take_refill",
+                JSONObject().put("p_request_id", requestId).put("p_method", method),
+                authenticated = true,
+            )
             refreshWorld()
-            if (result.optBoolean("ad_skip_available")) {
-                _events.emit(OneEvent.AdSkipGranted(result.optInt("ad_skips_remaining_today", 0)))
+            if (result.optBoolean("ok")) {
+                _events.emit(OneEvent.TakeRefillBypassed(method))
             }
         }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
     }
@@ -670,7 +669,11 @@ class CloudOneRepository(context: Context) : OneRepository {
             demoMode = false,
             currentUserId = json.optString("current_user_id"),
             currentUser = currentUserJson?.let(::parseOwner),
-            cooldownRemainingSeconds = json.optInt("cooldown_remaining_seconds"),
+            takeBalance = json.optInt("take_balance", 2),
+            takeBalanceCap = json.optInt("take_balance_cap", 2),
+            takeRefillSeconds = json.optInt("take_refill_seconds"),
+            takeAdBypassesRemainingToday = json.optInt("take_ad_bypasses_remaining_today", 2),
+            takeBypassCreditCost = json.optInt("take_bypass_credit_cost", 1),
             takeoversToday = json.optInt("takeovers_today"),
             activity = json.optJSONArray("activity").objects().map { item ->
                 TakeoverActivity(
@@ -694,8 +697,6 @@ class CloudOneRepository(context: Context) : OneRepository {
             } ?: emptyList(),
             reactionCounts = json.optJSONObject("reaction_counts")?.let { counts -> counts.keys().asSequence().associateWith { counts.optInt(it) } },
             myReactions = json.optJSONArray("my_reactions")?.let { list -> (0 until list.length()).map { list.getString(it) }.toSet() } ?: emptySet(),
-            adSkipAvailable = json.optBoolean("ad_skip_available"),
-            adSkipsRemainingToday = json.optInt("ad_skips_remaining_today", 3),
             userTakeovers = json.optJSONObject("user_stats")?.optInt("takeovers"),
             userLongestReign = json.optJSONObject("user_stats")?.optInt("longest_reign_seconds"),
             userVerifiedViews = json.optJSONObject("user_stats")?.optInt("verified_views"),

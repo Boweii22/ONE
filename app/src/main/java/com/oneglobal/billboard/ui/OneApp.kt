@@ -316,6 +316,7 @@ fun OneApp(
                     onOpenVault = viewModel::openVault,
                     onInfo = viewModel::openHowItWorks,
                     onWatchAd = onWatchAd,
+                    onBypassWithCredits = viewModel::bypassTakeRefillWithCredits,
                 )
                 Overlay.RECEIPT -> ReceiptOverlay(
                     receipt = ui.receipt,
@@ -809,6 +810,21 @@ private fun ReactionOrb(icon: String, label: String, count: Int?, selected: Bool
     }
 }
 
+// Ticks down locally between polls instead of jumping in ~1.5s steps, and
+// resnaps to the real server value the moment a fresh one arrives.
+@Composable
+private fun rememberCountdownSeconds(serverSeconds: Int): Int {
+    var remaining by remember(serverSeconds) { mutableStateOf(serverSeconds) }
+    LaunchedEffect(serverSeconds) {
+        remaining = serverSeconds
+        while (remaining > 0) {
+            delay(1_000)
+            remaining -= 1
+        }
+    }
+    return remaining
+}
+
 @Composable
 private fun AuctionCard(
     world: WorldState,
@@ -818,11 +834,15 @@ private fun AuctionCard(
     onPrimary: () -> Unit,
     offline: Boolean = false,
 ) {
-    val cooldown = world.cooldownRemainingSeconds
-    val canRevenge = cooldown > 0 && world.credits > 0
-    val canTake = protectedSeconds == 0 && (cooldown == 0 || canRevenge)
+    val hasBalance = world.takeBalance > 0
+    val canTake = protectedSeconds == 0 && hasBalance
+    val refillSeconds = rememberCountdownSeconds(world.takeRefillSeconds)
     val targets = LocalTourTargets.current
     Column(Modifier.fillMaxWidth().onGloballyPositioned { targets["TAKE"] = it.boundsInRoot() }) {
+        if (!isOwner) {
+            TakeBalancePips(world.takeBalance, world.takeBalanceCap, refillSeconds, accent)
+            Spacer(Modifier.height(10.dp))
+        }
         Button(
             onClick = onPrimary,
             enabled = !offline && (isOwner || canTake),
@@ -840,9 +860,8 @@ private fun AuctionCard(
                     offline -> "⊘  OFFLINE — CAN'T TAKE THE SCREEN"
                     isOwner -> "⚡  BROADCAST YOUR REIGN"
                     protectedSeconds > 0 -> "TAKEOVER LANDS IN ${protectedSeconds}s"
-                    cooldown == 0 -> "⚡  TAKE THE SCREEN"
-                    canRevenge -> "ϟ  SKIP COOLDOWN — 1 CREDIT"
-                    else -> "FREE STEAL RECHARGES IN ${cooldown}s"
+                    hasBalance -> "⚡  TAKE THE SCREEN"
+                    else -> "NEXT TAKE IN ${refillSeconds}s"
                 },
                 fontWeight = FontWeight.Black,
                 fontSize = 12.sp,
@@ -851,12 +870,44 @@ private fun AuctionCard(
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            if (offline) "Reconnect to challenge for ONE." else if (isOwner) "The world is watching your message." else "Challenge ${world.reign.owner.handle} to take ONE.",
+            when {
+                offline -> "Reconnect to challenge for ONE."
+                isOwner -> "The world is watching your message."
+                hasBalance -> "Challenge ${world.reign.owner.handle} to take ONE."
+                else -> "Watch an ad or spend credits to skip the wait."
+            },
             color = Muted,
             fontFamily = mono,
             fontSize = 12.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+// Filled pips for held takes, an empty pip mid-refill with a live countdown
+// next to it - "how many I have" and "when the next one lands" in one glance.
+@Composable
+private fun TakeBalancePips(balance: Int, cap: Int, refillSeconds: Int, accent: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        repeat(cap.coerceAtLeast(1)) { index ->
+            if (index > 0) Spacer(Modifier.width(6.dp))
+            Box(
+                Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(if (index < balance) accent else Color.White.copy(alpha = .12f))
+                    .then(if (index >= balance) Modifier.border(1.dp, accent.copy(alpha = .4f), CircleShape) else Modifier),
+            )
+        }
+        Spacer(Modifier.width(9.dp))
+        Text(
+            if (balance > 0) "$balance TAKE${if (balance == 1) "" else "S"} HELD" else "NEXT IN ${refillSeconds}s",
+            color = Muted,
+            fontFamily = mono,
+            fontWeight = FontWeight.Bold,
+            fontSize = 11.sp,
+            letterSpacing = .4.sp,
         )
     }
 }
@@ -1331,11 +1382,14 @@ private fun ChallengeOverlay(
     onOpenVault: () -> Unit,
     onInfo: () -> Unit,
     onWatchAd: () -> Unit,
+    onBypassWithCredits: () -> Unit,
 ) {
     val accent = Acid
-    val needsTicket = world.cooldownRemainingSeconds > 0
-    val adSkipReady = BuildConfig.ADMOB_REWARDED_UNIT_ID.isNotBlank()
-    val canAttempt = !needsTicket || world.credits > 0 || world.adSkipAvailable
+    val hasBalance = world.takeBalance > 0
+    val adBypassReady = BuildConfig.ADMOB_REWARDED_UNIT_ID.isNotBlank() && world.takeAdBypassesRemainingToday > 0
+    val canBypassWithCredits = world.credits >= world.takeBypassCreditCost
+    val canAttempt = hasBalance || canBypassWithCredits || adBypassReady
+    val refillSeconds = rememberCountdownSeconds(world.takeRefillSeconds)
     val selected = world.messages.firstOrNull { it.id == ui.selectedMessageId }
     val busy = ui.challengePhase !in listOf(ChallengePhase.IDLE, ChallengePhase.FAILED)
 
@@ -1373,19 +1427,34 @@ private fun ChallengeOverlay(
                 Text(world.reign.message.text, color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 25.sp, lineHeight = 25.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
                 Text("Choose your move.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 9.dp, bottom = 14.dp))
 
-                ChallengeChoice("ϟ", "FREE STEAL", "Fastest path. Ready after cooldown.", if (needsTicket) "${world.cooldownRemainingSeconds}s" else "READY", Acid, selected = !needsTicket)
-                Spacer(Modifier.height(10.dp))
-                ChallengeChoice("ϟ", "ONE CREDIT", "Skip the cooldown. Spent only if you win.", "${world.credits} LEFT", Ice, selected = needsTicket && !world.adSkipAvailable && world.credits > 0, onClick = if (world.credits == 0) onOpenVault else null)
-                if (needsTicket && adSkipReady) {
+                ChallengeChoice(
+                    "ϟ",
+                    "TAKE BALANCE",
+                    if (hasBalance) "${world.takeBalance} of ${world.takeBalanceCap} held. Never expires." else "Next take in ${refillSeconds}s.",
+                    if (hasBalance) "${world.takeBalance} READY" else "${refillSeconds}s",
+                    Acid,
+                    selected = hasBalance,
+                )
+                if (!hasBalance) {
+                    Spacer(Modifier.height(10.dp))
+                    ChallengeChoice(
+                        "ϟ",
+                        "SPEND ${world.takeBypassCreditCost} CREDIT${if (world.takeBypassCreditCost == 1) "" else "S"}",
+                        "Get a take right now. ${world.credits} credits held.",
+                        if (canBypassWithCredits) "SPEND" else "GET CREDITS",
+                        Ice,
+                        selected = false,
+                        onClick = if (canBypassWithCredits) onBypassWithCredits else onOpenVault,
+                    )
                     Spacer(Modifier.height(10.dp))
                     ChallengeChoice(
                         "▶",
                         "WATCH AN AD",
-                        if (world.adSkipAvailable) "Ready. Spent only if you win." else "Skip the cooldown for free. ${world.adSkipsRemainingToday} left today.",
-                        if (world.adSkipAvailable) "READY" else if (world.adSkipsRemainingToday > 0) "WATCH" else "DAILY LIMIT",
+                        "Get a take right now. ${world.takeAdBypassesRemainingToday} left today.",
+                        if (adBypassReady) "WATCH" else "DAILY LIMIT",
                         Orange,
-                        selected = world.adSkipAvailable,
-                        onClick = if (!world.adSkipAvailable && world.adSkipsRemainingToday > 0) onWatchAd else null,
+                        selected = false,
+                        onClick = if (adBypassReady) onWatchAd else null,
                     )
                 }
                 Spacer(Modifier.height(10.dp))
@@ -1413,12 +1482,8 @@ private fun ChallengeOverlay(
                                 PrimaryButton("GET ONE CREDITS", Ice, onOpenVault)
                             } else {
                                 HoldToOwnButton(
-                                    text = when {
-                                        !needsTicket -> "HOLD TO CONTINUE — FREE"
-                                        world.adSkipAvailable -> "HOLD TO CONTINUE — AD SKIP"
-                                        else -> "HOLD TO CONTINUE — 1 CREDIT"
-                                    },
-                                    enabled = selected != null,
+                                    text = if (hasBalance) "HOLD TO CONTINUE — FREE" else "BYPASS THE WAIT ABOVE FIRST",
+                                    enabled = hasBalance && selected != null,
                                     onComplete = onBegin,
                                 )
                             }
@@ -2357,24 +2422,6 @@ private fun WonPanel(message: String) {
 }
 
 @Composable
-private fun RaceCard(world: WorldState) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(InkRaised).border(1.dp, Orange.copy(alpha = .5f), RoundedCornerShape(6.dp)).padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-        ProfilePhoto(world.reign.owner, palette(world.reign.palette), Modifier.size(44.dp))
-        Spacer(Modifier.width(11.dp))
-        Column(Modifier.weight(1f)) {
-            Text(world.reign.owner.handle, color = Paper, fontWeight = FontWeight.Black, fontSize = 13.sp)
-            Text("CURRENT OWNER", color = Muted, fontFamily = mono, fontSize = 12.sp)
-        }
-        Text("→", color = Muted, fontSize = 20.sp)
-        Spacer(Modifier.width(10.dp))
-        Column(horizontalAlignment = Alignment.End) {
-            Text("YOU", color = Acid, fontWeight = FontWeight.Black, fontSize = 13.sp)
-            Text(if (world.cooldownRemainingSeconds > 0) "REVENGE" else "FREE STEAL", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-        }
-    }
-}
-
-@Composable
 private fun SelectableMessage(message: OneMessage, selected: Boolean, onClick: () -> Unit) {
     Column(
         Modifier
@@ -2492,19 +2539,20 @@ private fun WalletHero(credits: Int, onClick: () -> Unit) {
 
 @Composable
 private fun DailyCapCard(world: WorldState) {
-    val progress = (1f - world.cooldownRemainingSeconds / 30f).coerceIn(0f, 1f)
+    val cap = world.takeBalanceCap.coerceAtLeast(1)
+    val progress = (world.takeBalance.toFloat() / cap).coerceIn(0f, 1f)
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(InkRaised).border(1.dp, Color.White.copy(alpha = .08f), RoundedCornerShape(7.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
                 drawCircle(Color.White.copy(alpha = .08f), style = Stroke(5.dp.toPx()))
                 drawArc(Acid, -90f, progress.coerceIn(0f, 1f) * 360f, false, style = Stroke(5.dp.toPx(), cap = StrokeCap.Round))
             }
-            Text(if (world.cooldownRemainingSeconds == 0) "GO" else "${world.cooldownRemainingSeconds}s", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            Text(if (world.takeBalance > 0) "${world.takeBalance}" else "${world.takeRefillSeconds}s", color = Paper, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
         }
         Spacer(Modifier.width(14.dp))
         Column {
-            Text("FREE STEAL CHARGE", color = Paper, fontWeight = FontWeight.Black, fontSize = 14.sp)
-            Text(if (world.cooldownRemainingSeconds == 0) "Ready now. Your next takeover costs nothing." else "Wait or spend 1 ONE Credit to move instantly.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            Text("TAKE BALANCE", color = Paper, fontWeight = FontWeight.Black, fontSize = 14.sp)
+            Text(if (world.takeBalance > 0) "$cap free takes max. Yours never expire." else "Next take in ${world.takeRefillSeconds}s, or bypass with an ad or credits.", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }

@@ -15,7 +15,7 @@ interface OneRepository {
     suspend fun forceRefresh()
     suspend fun submitMessage(text: String)
     suspend fun deleteMessage(id: String)
-    suspend fun grantAdReward()
+    suspend fun bypassTakeRefill(method: String, requestId: String)
     fun grantPurchasedCredits(amount: Int)
     fun reportCurrentMessage(reason: String)
     suspend fun blockCurrentOwner()

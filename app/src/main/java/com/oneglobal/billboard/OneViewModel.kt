@@ -122,8 +122,8 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                     is OneEvent.CreditsGranted -> _ui.update {
                         it.copy(toast = "+${event.amount} CREDITS // ${event.source}")
                     }
-                    is OneEvent.AdSkipGranted -> _ui.update {
-                        it.copy(toast = "COOLDOWN SKIP READY // ${event.remainingToday} AD SKIPS LEFT TODAY")
+                    is OneEvent.TakeRefillBypassed -> _ui.update {
+                        it.copy(toast = if (event.method == "ad") "TAKE READY // AD BYPASS USED" else "TAKE READY // CREDITS SPENT")
                     }
                     OneEvent.FeedbackSubmitted -> _ui.update {
                         it.copy(
@@ -424,7 +424,11 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun redeemAdReward() {
-        viewModelScope.launch { repository.grantAdReward() }
+        viewModelScope.launch { repository.bypassTakeRefill("ad", UUID.randomUUID().toString()) }
+    }
+
+    fun bypassTakeRefillWithCredits() {
+        viewModelScope.launch { repository.bypassTakeRefill("credits", UUID.randomUUID().toString()) }
     }
 
     fun grantPurchasedCredits(amount: Int) {

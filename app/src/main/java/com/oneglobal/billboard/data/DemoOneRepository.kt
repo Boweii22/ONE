@@ -132,22 +132,27 @@ class DemoOneRepository : OneRepository {
     )
     override val world: StateFlow<WorldState> = _world.asStateFlow()
 
+    private val takeLadderSeconds = listOf(60, 180, 480, 1200, 1800)
+    private var demoLadderStep = 0
+
     override fun start() {
         if (tickerJob?.isActive == true) return
         tickerJob = scope.launch {
             while (isActive) {
                 delay(700)
-                val now = System.currentTimeMillis()
                 _world.update { current ->
                     val appGain = random.nextInt(3, 12)
                     val webGain = random.nextInt(14, 52)
                     val watcherDrift = random.nextInt(-8, 14)
+                    val refillSeconds = (current.takeRefillSeconds - 1).coerceAtLeast(0)
+                    val collected = current.takeBalance <= 0 && refillSeconds <= 0
                     current.copy(
                         currentPrice = 0,
                         appViews = current.appViews + appGain,
                         webViews = current.webViews + webGain,
                         liveWatchers = (current.liveWatchers + watcherDrift).coerceAtLeast(900),
-                        cooldownRemainingSeconds = (current.cooldownRemainingSeconds - 1).coerceAtLeast(0),
+                        takeBalance = if (collected) 1 else current.takeBalance,
+                        takeRefillSeconds = if (collected) 0 else refillSeconds,
                     )
                 }
             }
@@ -181,18 +186,15 @@ class DemoOneRepository : OneRepository {
         if (AuctionRules.remainingDailySeconds(before.userDailyReignSeconds) <= 0) {
             return@withLock ChallengeResult.Failure("Your daily reign cap has been reached.")
         }
-
-        val usesAdSkip = before.cooldownRemainingSeconds > 0 && before.adSkipAvailable
-        val cost = if (before.cooldownRemainingSeconds > 0 && !usesAdSkip) 1 else 0
-        if (before.credits < cost) {
-            return@withLock ChallengeResult.Failure("You need ${cost - before.credits} more ONE credits.")
+        if (before.takeBalance <= 0) {
+            return@withLock ChallengeResult.Failure("Your next take is ready in ${before.takeRefillSeconds}s.")
         }
 
         onPhase(ChallengePhase.RESERVING, "RESERVING THE ONLY SCREEN")
         delay(620)
         onPhase(ChallengePhase.VERIFYING, "VERIFYING MESSAGE APPROVAL")
         delay(540)
-        onPhase(ChallengePhase.SPENDING, if (usesAdSkip) "USING AD SKIP" else if (cost == 0) "FREE TAKEOVER" else "SPENDING 1 ONE CREDIT")
+        onPhase(ChallengePhase.SPENDING, "SPENDING A TAKE")
         delay(700)
         onPhase(ChallengePhase.COMMITTING, "COMMITTING GLOBAL OWNERSHIP")
         delay(620)
@@ -208,7 +210,7 @@ class DemoOneRepository : OneRepository {
         val receipt = ReignReceipt(
             owner = user,
             message = selected.text,
-            paidCredits = cost,
+            paidCredits = 0,
             startedAtMillis = takeoverAt,
             appViews = 0,
             webViews = 0,
@@ -220,11 +222,14 @@ class DemoOneRepository : OneRepository {
             message = selected.copy(timesDeployed = selected.timesDeployed + 1),
             startedAtMillis = takeoverAt,
             protectedUntilMillis = takeoverAt + AuctionRules.PROTECTED_SECONDS * 1_000L,
-            paidCredits = cost,
+            paidCredits = 0,
             openingPrice = 0,
             floorPrice = 0,
             palette = PaletteKey.ACID,
         )
+        val nextBalance = before.takeBalance - 1
+        val nextRefillSeconds = if (nextBalance <= 0) takeLadderSeconds[demoLadderStep] else 0
+        if (nextBalance <= 0) demoLadderStep = (demoLadderStep + 1) % takeLadderSeconds.size
         _world.update { current ->
             current.copy(
                 reign = newReign,
@@ -232,10 +237,9 @@ class DemoOneRepository : OneRepository {
                 appViews = 0,
                 webViews = 0,
                 liveWatchers = current.liveWatchers + 240,
-                credits = current.credits - cost,
-                adSkipAvailable = if (usesAdSkip) false else current.adSkipAvailable,
+                takeBalance = nextBalance,
+                takeRefillSeconds = nextRefillSeconds,
                 userRetakesToday = current.userRetakesToday + 1,
-                cooldownRemainingSeconds = 30,
                 takeoversToday = current.takeoversToday + 1,
                 messages = current.messages.map {
                     if (it.id == selected.id) it.copy(timesDeployed = it.timesDeployed + 1) else it
@@ -339,11 +343,21 @@ class DemoOneRepository : OneRepository {
         _events.emit(OneEvent.Error(if (target.timesDeployed == 0) "Message deleted." else "Message removed from your library."))
     }
 
-    override suspend fun grantAdReward() {
-        delay(2_400)
-        val remaining = (_world.value.adSkipsRemainingToday - 1).coerceAtLeast(0)
-        _world.update { it.copy(adSkipAvailable = true, adSkipsRemainingToday = remaining) }
-        _events.emit(OneEvent.AdSkipGranted(remaining))
+    override suspend fun bypassTakeRefill(method: String, requestId: String) {
+        delay(if (method == "ad") 2_400 else 300)
+        if (_world.value.takeBalance > 0) return
+        if (method == "ad") {
+            val remaining = (_world.value.takeAdBypassesRemainingToday - 1).coerceAtLeast(0)
+            _world.update { it.copy(takeBalance = 1, takeRefillSeconds = 0, takeAdBypassesRemainingToday = remaining) }
+        } else {
+            val cost = _world.value.takeBypassCreditCost
+            if (_world.value.credits < cost) {
+                _events.emit(OneEvent.Error("You need ${cost - _world.value.credits} more ONE credits."))
+                return
+            }
+            _world.update { it.copy(takeBalance = 1, takeRefillSeconds = 0, credits = it.credits - cost) }
+        }
+        _events.emit(OneEvent.TakeRefillBypassed(method))
     }
 
     override fun grantPurchasedCredits(amount: Int) {
