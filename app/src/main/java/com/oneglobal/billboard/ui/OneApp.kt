@@ -184,6 +184,9 @@ fun OneApp(
         return
     }
 
+    // A banned/suspended account keeps watching normally - only the take
+    // action itself is blocked, via Overlay.RESTRICTED opened from
+    // openChallenge(). No full-screen gate here on purpose.
     BackHandler(ui.overlay != Overlay.NONE) { viewModel.closeOverlay() }
 
     LaunchedEffect(ui.takeoverPulse) {
@@ -317,6 +320,10 @@ fun OneApp(
                     onInfo = viewModel::openHowItWorks,
                     onWatchAd = onWatchAd,
                     onBypassWithCredits = viewModel::bypassTakeRefillWithCredits,
+                )
+                Overlay.RESTRICTED -> RestrictedOverlay(
+                    world = world,
+                    onClose = viewModel::closeOverlay,
                 )
                 Overlay.RECEIPT -> ReceiptOverlay(
                     receipt = ui.receipt,
@@ -1105,6 +1112,13 @@ private fun HallScreen(world: WorldState, onTakeIt: () -> Unit, offline: Boolean
             HallSortChip("VIEWS", sort == HallSort.VIEWS, Modifier.weight(1f)) { sort = HallSort.VIEWS }
         }
         Spacer(Modifier.height(18.dp))
+        // The winning message is the headline of the Hall, not a row within
+        // it - it sits directly beneath the filters, above rank one, not
+        // buried mid-list.
+        if (period == HallPeriod.TODAY && champion != null) {
+            HallChampionCard(champion)
+            Spacer(Modifier.height(18.dp))
+        }
         AnimatedContent(period to sort, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(140)) }, label = "hall-period") {
             Column {
                 if (visibleEntries.isEmpty()) {
@@ -1118,13 +1132,7 @@ private fun HallScreen(world: WorldState, onTakeIt: () -> Unit, offline: Boolean
                         val isCurrentUser = entry.owner.id == world.currentUserId
                         if (isCurrentUser) YourRankDivider()
                         HallRow(entry, sort, isCurrentUser, emphasized = !isCurrentUser && index < 3)
-                        if (index == 2 && period == HallPeriod.TODAY && champion != null) {
-                            Spacer(Modifier.height(12.dp))
-                            HallChampionCard(champion)
-                            Spacer(Modifier.height(12.dp))
-                        } else {
-                            Spacer(Modifier.height(if (isCurrentUser) 12.dp else 4.dp))
-                        }
+                        Spacer(Modifier.height(if (isCurrentUser) 12.dp else 4.dp))
                     }
                     if (gapToNextRank != null && gapToNextRank > 0 && rankAbove != null) {
                         HallGapCard(gapToNextRank, rankAbove.owner.handle, sort, onTakeIt)
@@ -1134,15 +1142,29 @@ private fun HallScreen(world: WorldState, onTakeIt: () -> Unit, offline: Boolean
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            HallStat(today.size.toString(), "REIGNS TODAY")
             HallStat(world.takeoversToday.toString(), "TAKEOVERS TODAY")
-            HallStat(formatNumber(today.sumOf { it.verifiedViews }), "TOTAL VIEWS TODAY")
+            HallStat(today.size.toString(), "PLAYERS TODAY")
+            HallStat(formatNumber(today.sumOf { it.verifiedViews }), "VIEWS TODAY")
         }
         Spacer(Modifier.height(18.dp))
-        Surface(color = if (showFull) Acid else Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Acid.copy(alpha = .75f)), modifier = Modifier.fillMaxWidth().clickable { showFull = !showFull }) {
-            Text(if (showFull) "COLLAPSE LEADERBOARD  ↑" else "VIEW FULL LEADERBOARD  ↓", color = if (showFull) Ink else Paper, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
+        if (showFull) {
+            // A minor control once expanded - demoted to a quiet text link so
+            // it doesn't compete with VIEW FULL LEADERBOARD's emphasis.
+            Text(
+                "COLLAPSE  ↑",
+                color = Muted,
+                fontFamily = mono,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().clickable { showFull = false }.padding(vertical = 14.dp),
+            )
+        } else {
+            Surface(color = Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Acid.copy(alpha = .75f)), modifier = Modifier.fillMaxWidth().clickable { showFull = true }) {
+                Text("VIEW FULL LEADERBOARD  ↓", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
+            }
         }
-        Text("◇ ${sortedEntries.size} VERIFIED REIGNS // ${if (selectedPeriodIsLive) "UPDATED LIVE" else "SERVER UPDATE REQUIRED"}", color = Muted, fontFamily = mono, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
+        Text("◇ ${world.takeoversToday} TAKEOVERS TODAY // ${if (selectedPeriodIsLive) "UPDATED LIVE" else "SERVER UPDATE REQUIRED"}", color = Muted, fontFamily = mono, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
     }
     }
 }
@@ -2309,6 +2331,88 @@ private fun DeleteAccountOverlay(
         }
         Spacer(Modifier.height(18.dp))
         Text("Questions: oneglobalscreen@gmail.com", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+    }
+}
+
+// Blocks only the take action, not the app: watching Live/Hall/Words stays
+// fully available for a banned or suspended account, matching what the
+// server itself enforces (view/watch RPCs never check banned_at/
+// suspended_until - only take_one and similar action RPCs do).
+private fun remainingSuspensionLabel(untilMillis: Long): String {
+    val minutes = ((untilMillis - System.currentTimeMillis()) / 60_000L).coerceAtLeast(0L)
+    return when {
+        minutes < 1L -> "less than a minute"
+        minutes < 60L -> "about $minutes minute${if (minutes == 1L) "" else "s"}"
+        else -> {
+            val hours = minutes / 60
+            "about $hours hour${if (hours == 1L) "" else "s"}"
+        }
+    }
+}
+
+@Composable
+private fun RestrictedOverlay(
+    world: WorldState,
+    onClose: () -> Unit,
+) {
+    val banned = world.accountRestriction == "banned"
+    val suspendedUntil = world.accountSuspendedUntilMillis
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Ink)
+            .safeDrawingPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+    ) {
+        OverlayHeader("ACCOUNT STATUS", if (banned) "PERMANENT" else "TEMPORARY", onClose)
+        Spacer(Modifier.height(30.dp))
+        Box(Modifier.size(64.dp).clip(CircleShape).background(Orange.copy(alpha = .12f)).border(1.dp, Orange.copy(alpha = .5f), CircleShape), contentAlignment = Alignment.Center) {
+            Text("!", color = Orange, fontWeight = FontWeight.Black, fontFamily = mono, fontSize = 26.sp)
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            if (banned) "YOU CAN'T\nTAKE ONE." else "TAKING IS\nPAUSED.",
+            color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 40.sp,
+        )
+        Text(
+            if (banned) "Your account was removed from taking the screen for violating ONE's community rules. You can still watch everything live — you just can't take it."
+            else "Your account can't take the screen for a little while, for violating ONE's community rules. You can still watch everything live — taking comes back automatically.",
+            color = Muted,
+            fontFamily = mono,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            modifier = Modifier.padding(top = 14.dp),
+        )
+        Spacer(Modifier.height(24.dp))
+        if (!world.accountRestrictionReason.isNullOrBlank()) {
+            Surface(color = InkRaised, shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .08f))) {
+                Column(Modifier.padding(18.dp)) {
+                    Text("REASON", color = Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 10.sp, letterSpacing = 1.sp)
+                    Text(world.accountRestrictionReason, color = Paper, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+        if (!banned && suspendedUntil != null) {
+            Surface(color = Orange.copy(alpha = .1f), shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, Orange.copy(alpha = .38f))) {
+                Column(Modifier.padding(18.dp)) {
+                    Text("TAKING RETURNS IN", color = Orange, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                    Text(remainingSuspensionLabel(suspendedUntil), color = Paper, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+        Button(
+            onClick = onClose,
+            modifier = Modifier.fillMaxWidth().height(58.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = InkRaised, contentColor = Paper),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Text("KEEP WATCHING", fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp)
+        }
+        Spacer(Modifier.height(18.dp))
+        Text("Think this is a mistake? oneglobalscreen@gmail.com", color = Muted, fontFamily = mono, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
     }
 }
 

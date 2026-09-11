@@ -36,8 +36,15 @@ type OneState = {
   reactions: Reaction[];
 };
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// Sites injects production environment variables at runtime, while Vite replaces
+// import.meta.env values during the build. Keep the public Supabase client config
+// as a build-safe fallback so the browser bundle is never left unconfigured.
+const SUPABASE_URL =
+  (import.meta.env.VITE_SUPABASE_URL as string | undefined) ||
+  'https://ajkdzohnntrbkeqjskel.supabase.co';
+const SUPABASE_KEY =
+  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
+  'sb_publishable_PGTCO8gqoSrbPgjxXbYqdg_F_D6oqO-';
 const PLAY_URL = 'https://play.google.com/store/apps/details?id=com.tomribowei.one';
 
 const accentByPalette: Record<string, string> = {

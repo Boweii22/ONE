@@ -706,6 +706,10 @@ class CloudOneRepository(context: Context) : OneRepository {
             userTakeovers = json.optJSONObject("user_stats")?.optInt("takeovers"),
             userLongestReign = json.optJSONObject("user_stats")?.optInt("longest_reign_seconds"),
             userVerifiedViews = json.optJSONObject("user_stats")?.optInt("verified_views"),
+            accountRestriction = json.optString("account_restriction").takeIf { it.isNotBlank() && it != "null" },
+            accountRestrictionReason = json.optString("account_restriction_reason").takeIf { it.isNotBlank() && it != "null" },
+            accountSuspendedUntilMillis = json.optLong("account_suspended_until_ms").takeIf { it > 0L },
+            accountOffenseCount = json.optInt("account_offense_count"),
         )
     }
 

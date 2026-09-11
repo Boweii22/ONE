@@ -1,12 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Ban, Check, Clock3, Flag, LogOut, Power, Radio, ShieldCheck, Users, X } from 'lucide-react';
 import './moderation.css';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// These are public browser credentials. Sites runtime variables are not available
+// while Vite compiles client code, so retain a build-safe fallback.
+const SUPABASE_URL =
+  (import.meta.env.VITE_SUPABASE_URL as string | undefined) ||
+  'https://ajkdzohnntrbkeqjskel.supabase.co';
+const SUPABASE_KEY =
+  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
+  'sb_publishable_PGTCO8gqoSrbPgjxXbYqdg_F_D6oqO-';
 const SESSION_KEY = 'one_web_session';
-const UNDO_WINDOW_MS = 4000;
+const UNDO_WINDOW_MS = 20000;
 const QUEUE_POLL_MS = 4000;
 
 type BrowserSession = { access_token: string; refresh_token: string; expires_at: number };
@@ -216,16 +223,27 @@ export default function ModerationConsole() {
   }, []);
 
   if (phase === 'loading') {
-    return <main className="mod-shell"><div className="mod-center"><p>Loading…</p></div></main>;
+    return (
+      <main className="mod-shell">
+        <div className="grid-glow" aria-hidden="true" />
+        <div className="mod-gate">
+          <div className="mod-mark"><span>1</span></div>
+          <p className="mod-loading-text">SYNCING WITH THE SCREEN…</p>
+        </div>
+      </main>
+    );
   }
 
   if (phase === 'signed_out') {
     return (
       <main className="mod-shell">
-        <div className="mod-center">
-          <span style={{ fontWeight: 900, fontSize: 40, color: 'var(--acid)' }}>1</span>
-          <p>The moderation console needs a Google sign-in with staff access on your ONE account.</p>
-          <button type="button" className="mod-signin" onClick={signIn}>SIGN IN WITH GOOGLE</button>
+        <div className="grid-glow" aria-hidden="true" />
+        <div className="mod-gate">
+          <div className="mod-gate-eyebrow"><ShieldCheck /> STAFF ACCESS ONLY</div>
+          <div className="mod-mark"><span>1</span></div>
+          <h1>THE CONTROL<br />ROOM.</h1>
+          <p>Sign in with the Google account linked to your ONE staff profile to open the report queue.</p>
+          <button type="button" className="mod-cta" onClick={signIn}><Radio /> SIGN IN WITH GOOGLE</button>
         </div>
       </main>
     );
@@ -234,9 +252,13 @@ export default function ModerationConsole() {
   if (phase === 'not_staff') {
     return (
       <main className="mod-shell">
-        <div className="mod-center">
-          <p>Signed in as <strong>{handle}</strong>, but this account doesn&apos;t have staff access.</p>
-          <button type="button" className="mod-signin" onClick={signOut}>SIGN OUT</button>
+        <div className="grid-glow" aria-hidden="true" />
+        <div className="mod-gate">
+          <div className="mod-denied-tag"><AlertTriangle /> NOT AUTHORIZED</div>
+          <div className="mod-mark"><span>1</span></div>
+          <h1>WRONG<br />ACCOUNT.</h1>
+          <p>Signed in as <strong>{handle}</strong>, but this account doesn&apos;t have staff access on ONE.</p>
+          <button type="button" className="mod-ghost" onClick={signOut}><LogOut /> SIGN OUT</button>
         </div>
       </main>
     );
@@ -246,64 +268,103 @@ export default function ModerationConsole() {
   const items = displayIds
     .map((id) => queue.find((entry) => entry.reign_id === id) ?? pending[id]?.item)
     .filter((item): item is QueueItem => Boolean(item));
+  const autoPulledCount = items.filter((item) => item.auto_pulled).length;
 
   return (
     <main className="mod-shell">
+      <div className="grid-glow" aria-hidden="true" />
       <header className="mod-top">
-        <span className="mod-brand"><strong>1</strong><span>MODERATION</span></span>
-        <button type="button" className="mod-signout" onClick={signOut}>SIGN OUT · {handle}</button>
+        <div className="mod-brand">
+          <span className="mod-brand-mark">1</span>
+          <div><strong>MODERATION</strong><small>CONTROL ROOM</small></div>
+        </div>
+        <button type="button" className="mod-signout" onClick={signOut}><LogOut /> {handle}</button>
       </header>
 
-      <div className={`mod-kill${killSwitch ? ' active' : ''}`}>
-        <div className="mod-kill-label">
-          <strong>GLOBAL KILL SWITCH</strong>
-          <span>{killSwitch ? 'ONE IS PAUSED FOR EVERYONE' : 'ONE IS LIVE'}</span>
+      <div className="mod-inner">
+        <div className="mod-hero">
+          <div className="mod-hero-eyebrow"><i />LIVE REPORT QUEUE</div>
+          <h1>THE <em>SCREEN,</em><br />WATCHED.</h1>
         </div>
-        <button type="button" className={`mod-toggle${killSwitch ? ' on' : ''}`} onClick={() => void toggleKillSwitch()} aria-label="Toggle global kill switch"><i /></button>
+
+        <div className={`mod-kill${killSwitch ? ' active' : ''}`}>
+          <div className="mod-kill-icon"><Power /></div>
+          <div className="mod-kill-label">
+            <strong>GLOBAL KILL SWITCH</strong>
+            <span>{killSwitch ? 'ONE IS PAUSED — NOBODY CAN TAKE THE SCREEN' : 'ONE IS LIVE AND TAKEABLE'}</span>
+          </div>
+          <button type="button" className={`mod-toggle${killSwitch ? ' on' : ''}`} onClick={() => void toggleKillSwitch()} aria-label="Toggle global kill switch"><i /></button>
+        </div>
+
+        <div className="mod-stats">
+          <div className="mod-stat"><Flag /><div><strong>{items.length}</strong><span>UNRESOLVED</span></div></div>
+          <div className={`mod-stat${autoPulledCount > 0 ? ' warn' : ''}`}><AlertTriangle /><div><strong>{autoPulledCount}</strong><span>AUTO-PULLED</span></div></div>
+        </div>
+
+        {items.length === 0 ? (
+          <div className="mod-empty">
+            <ShieldCheck />
+            <strong>QUEUE IS CLEAR</strong>
+            <span>Nothing waiting on you right now. New reports show up here within a few seconds.</span>
+          </div>
+        ) : (
+          <div className="mod-list">
+            {items.map((item, index) => {
+              const activePending = pending[item.reign_id];
+              if (activePending) {
+                const secondsLeft = Math.max(0, Math.ceil((activePending.deadline - now) / 1000));
+                const actionLabel = activePending.action === 'dismiss' ? 'DISMISSING' : activePending.action === 'remove' ? 'REMOVING' : 'BANNING';
+                return (
+                  <div key={item.reign_id} className="mod-card">
+                    <div className={`mod-undo ${activePending.action}`}>
+                      <svg className="mod-undo-ring" viewBox="0 0 40 40">
+                        <circle className="mod-undo-track" cx="20" cy="20" r="17" />
+                        <circle className="mod-undo-progress" cx="20" cy="20" r="17" style={{ animationDuration: `${UNDO_WINDOW_MS}ms` }} />
+                      </svg>
+                      <div className="mod-undo-copy">
+                        <span>{actionLabel} IN</span>
+                        <strong>{secondsLeft}s</strong>
+                      </div>
+                      <div className="mod-undo-fill" />
+                      <button type="button" className="mod-undo-btn" onClick={() => undoAction(item.reign_id)}><X /> UNDO</button>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <article key={item.reign_id} className={`mod-card${item.hold_active ? ' pulled' : ''}`} style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}>
+                  {item.auto_pulled && <div className="mod-pulled-tag"><AlertTriangle /> AUTO-PULLED</div>}
+                  <div className="mod-card-head">
+                    <div className="mod-owner-chip">
+                      <span className="mod-avatar">{item.owner_handle.replace('@', '').slice(0, 1) || '1'}</span>
+                      <strong>{item.owner_handle}</strong>
+                    </div>
+                    <span className="mod-when"><Clock3 /> {timeAgo(item.reign_started_at_ms, now)}</span>
+                  </div>
+                  <blockquote className="mod-message">&ldquo;{item.message_text}&rdquo;</blockquote>
+                  <div className="mod-meta">
+                    {item.reasons.map((reason) => <span key={reason} className="mod-chip">{reason}</span>)}
+                    <span className="mod-chip"><Users /><strong>{item.unique_reporters}</strong>&nbsp;reporter{item.unique_reporters === 1 ? '' : 's'}</span>
+                  </div>
+                  <p className="mod-reporters">REPORTED BY <b>{item.reporter_handles.join(', ')}</b></p>
+                  <div className="mod-actions">
+                    <button type="button" className="mod-btn dismiss" onClick={() => startAction(item, 'dismiss')}><Check /> DISMISS</button>
+                    <button type="button" className="mod-btn remove" onClick={() => startAction(item, 'remove')}><Flag /> REMOVE</button>
+                    <button type="button" className="mod-btn ban" onClick={() => startAction(item, 'ban')}><Ban /> BAN</button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      <div className="mod-count"><span>UNRESOLVED REPORTS</span><b>{items.length}</b></div>
-
-      {items.length === 0 ? (
-        <div className="mod-empty">Queue is clear.</div>
-      ) : (
-        items.map((item) => {
-          const activePending = pending[item.reign_id];
-          if (activePending) {
-            const secondsLeft = Math.max(0, Math.ceil((activePending.deadline - now) / 1000));
-            return (
-              <div key={item.reign_id} className="mod-card">
-                <div className="mod-undo">
-                  <span>{activePending.action.toUpperCase()} in <b>{secondsLeft}s</b></span>
-                  <button type="button" className="mod-undo-btn" onClick={() => undoAction(item.reign_id)}>UNDO</button>
-                </div>
-              </div>
-            );
-          }
-          return (
-            <div key={item.reign_id} className={`mod-card${item.hold_active ? ' pulled' : ''}`}>
-              {item.auto_pulled && <div className="mod-pulled-tag">● AUTO-PULLED</div>}
-              <div className="mod-card-head">
-                <span className="mod-owner">{item.owner_handle}</span>
-                <span className="mod-when">{timeAgo(item.reign_started_at_ms, now)}</span>
-              </div>
-              <p className="mod-message">&ldquo;{item.message_text}&rdquo;</p>
-              <div className="mod-meta">
-                {item.reasons.map((reason) => <span key={reason} className="mod-chip">{reason}</span>)}
-                <span className="mod-chip"><strong>{item.unique_reporters}</strong> reporter{item.unique_reporters === 1 ? '' : 's'}</span>
-              </div>
-              <p className="mod-reporters">Reported by <b>{item.reporter_handles.join(', ')}</b></p>
-              <div className="mod-actions">
-                <button type="button" className="mod-btn dismiss" onClick={() => startAction(item, 'dismiss')}>DISMISS</button>
-                <button type="button" className="mod-btn remove" onClick={() => startAction(item, 'remove')}>REMOVE</button>
-                <button type="button" className="mod-btn ban" onClick={() => startAction(item, 'ban')}>BAN</button>
-              </div>
-            </div>
-          );
-        })
+      {toast && (
+        <div className={`mod-toast${toast.error ? ' error' : ''}`}>
+          {toast.error ? <AlertTriangle /> : <Check />}
+          {toast.text}
+        </div>
       )}
-
-      {toast && <div className={`mod-toast${toast.error ? ' error' : ''}`}>{toast.text}</div>}
     </main>
   );
 }

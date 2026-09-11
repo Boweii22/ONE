@@ -232,6 +232,10 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openChallenge() {
+        if (world.value.accountRestriction != null) {
+            _ui.update { it.copy(overlay = Overlay.RESTRICTED) }
+            return
+        }
         val selected = _ui.value.selectedMessageId
             ?: world.value.messages.firstOrNull { it.status == MessageStatus.APPROVED }?.id
         _ui.update {

@@ -20,6 +20,7 @@ enum class Overlay {
     DELETE_ACCOUNT,
     HOW_IT_WORKS,
     PROFILE,
+    RESTRICTED,
 }
 
 enum class MessageStatus {
@@ -157,6 +158,10 @@ data class WorldState(
     val userLongestReign: Int? = null,
     val userVerifiedViews: Int? = null,
     val blockedAccounts: List<BlockedAccount> = emptyList(),
+    val accountRestriction: String? = null,
+    val accountRestrictionReason: String? = null,
+    val accountSuspendedUntilMillis: Long? = null,
+    val accountOffenseCount: Int = 0,
     val lastConnectedAtMillis: Long = System.currentTimeMillis(),
 )
 
