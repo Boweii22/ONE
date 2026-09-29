@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "project": {
+    "catalog": "prod",
+    "initializedAt": "2026-09-12T16:55:12.237Z",
+    "merchantDisplayName": null,
+    "merchantId": "acct_1QjfUY07xO8zsARA",
+    "projectId": "project_61VOIAENQZPvm5Inx16Rt3Ru0IE9qmJFlLMijiUREBSi",
+    "projectName": "ONE"
+  },
+  "providers": {
+    "revenuecat": {
+      "accountRequestId": "fprvcnn_61VOIClxTQ4Xtaw7r16Rt3Ru0IE9qmJFlLMijiURERpY",
+      "configuration": {},
+      "linkedAt": "2026-09-12T16:57:51.161Z",
+      "providerId": "prvdr_61UvIBCNECigaYpha53zM",
+      "providerName": "RevenueCat",
+      "redirectUrl": null,
+      "requestedAt": "2026-09-12T16:57:51.161Z",
+      "status": "complete"
+    }
+  },
+  "resources": {
+    "revenuecat-app": {
+      "configuration": {},
+      "createdAt": "2026-09-12T16:58:16.843Z",
+      "lastRevealedAt": "2026-09-12T16:58:17.486Z",
+      "lastStatus": "complete",
+      "name": "revenuecat-app",
+      "providerId": "prvdr_61UvIBCNECigaYpha53zM",
+      "providerName": "RevenueCat",
+      "resourceId": "fres_61VOIDBjMjaOcjl0t16Rt3Ru0IE9qmJFlLMijiUREVeq",
+      "serviceId": "app"
+    }
+  }
+}

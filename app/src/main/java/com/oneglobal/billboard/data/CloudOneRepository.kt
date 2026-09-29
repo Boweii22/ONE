@@ -3,6 +3,7 @@ package com.oneglobal.billboard.data
 import android.content.Context
 import android.util.Log
 import com.oneglobal.billboard.BuildConfig
+import com.oneglobal.billboard.model.BypassResult
 import com.oneglobal.billboard.model.ChallengePhase
 import com.oneglobal.billboard.model.ChallengeResult
 import com.oneglobal.billboard.model.CrowdReaction
@@ -192,17 +193,26 @@ class CloudOneRepository(context: Context) : OneRepository {
         }
     }
 
-    /** Fire-and-forget: asks the moderation model to score this message and apply a verdict. */
+    // Asks the moderation model to score this message and apply a verdict, then
+    // actually reports back - the promised "few seconds" is a lie to the user
+    // if the app asks the question and never listens for the answer. Silent
+    // (no event) when the verdict is still 'reviewing': that's the deliberate
+    // human-queue path (first-ever message, ambiguous score, or no model
+    // configured), not something to falsely narrate as resolved.
     private suspend fun triggerMessageModeration(messageId: String) {
-        runCatching {
+        val response = runCatching {
             withContext(Dispatchers.IO) {
                 val token = ensureSession().accessToken
                 val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/functions/v1/moderate-message", "POST", token)
                 connection.outputStream.use { it.write(JSONObject().put("message_id", messageId).toString().toByteArray()) }
                 connection.readJson()
             }
-        }
+        }.getOrNull()
         runCatching { refreshWorld() }
+        val verdict = response?.optString("verdict")
+        if (verdict == "approved" || verdict == "rejected") {
+            _world.value.messages.find { it.id == messageId }?.let { _events.emit(OneEvent.MessageModerationResolved(it)) }
+        }
     }
 
     override suspend fun deleteMessage(id: String) {
@@ -213,18 +223,39 @@ class CloudOneRepository(context: Context) : OneRepository {
         }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
     }
 
-    override suspend fun bypassTakeRefill(method: String, requestId: String) {
-        runCatching {
-            val result = rpc(
-                "bypass_take_refill",
-                JSONObject().put("p_request_id", requestId).put("p_method", method),
-                authenticated = true,
-            )
-            refreshWorld()
-            if (result.optBoolean("ok")) {
-                _events.emit(OneEvent.TakeRefillBypassed(method))
-            }
-        }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
+    override suspend fun bypassTakeRefill(method: String, requestId: String): BypassResult = runCatching {
+        // Credits are spent through the RPC. An ad take goes through the
+        // redeem-ad-reward function, which only grants after it has spent a
+        // RevenueCat-verified reward - the RPC itself refuses method "ad".
+        val result = if (method == "ad") redeemAdReward(requestId) else rpc(
+            "bypass_take_refill",
+            JSONObject().put("p_request_id", requestId).put("p_method", method),
+            authenticated = true,
+        )
+        refreshWorld()
+        if (result.optBoolean("ok")) {
+            _events.emit(OneEvent.TakeRefillBypassed(method))
+            BypassResult.Success
+        } else {
+            // A well-formed "no" from the server (daily cap hit, not enough
+            // credits) is definitive, not a dropped connection - don't let the
+            // caller keep reusing this request id past this point.
+            val reason = result.optString("message", "That didn't go through.")
+            _events.emit(OneEvent.Error(reason))
+            BypassResult.Failure(reason)
+        }
+    }.getOrElse { error ->
+        // Same convention as challenge(): only a definitive server answer
+        // (ApiException) is non-retryable. A timeout/dropped connection might
+        // have actually landed server-side, so the caller should reuse this
+        // same request id on retry instead of risking a duplicate redemption
+        // with a fresh one, and the reward can still be recovered.
+        _events.emit(OneEvent.Error(error.userMessage()))
+        BypassResult.Failure(error.userMessage(), retryable = error !is ApiException)
+    }
+
+    override suspend fun logAdOfferShown() {
+        runCatching { rpc("log_ad_offer_shown", JSONObject(), authenticated = true) }
     }
 
     override fun grantPurchasedCredits(amount: Int) {
@@ -595,6 +626,22 @@ class CloudOneRepository(context: Context) : OneRepository {
             }
             if (connection.responseCode !in 200..299) {
                 throw ApiException(connection.responseCode, payload.optString("message", payload.optString("hint", "ONE request failed.")))
+            }
+            payload
+        }
+
+    private suspend fun redeemAdReward(requestId: String, retry: Boolean = true): JSONObject =
+        withContext(Dispatchers.IO) {
+            val token = ensureSession().accessToken
+            val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/functions/v1/redeem-ad-reward", "POST", token)
+            connection.outputStream.use { it.write(JSONObject().put("request_id", requestId).toString().toByteArray()) }
+            val payload = connection.readJson()
+            if (connection.responseCode == 401 && retry) {
+                refreshSession()
+                return@withContext redeemAdReward(requestId, retry = false)
+            }
+            if (connection.responseCode !in 200..299) {
+                throw ApiException(connection.responseCode, payload.optString("message", "Couldn't confirm your ad reward."))
             }
             payload
         }

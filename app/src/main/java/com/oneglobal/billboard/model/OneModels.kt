@@ -212,6 +212,14 @@ sealed interface OneEvent {
     data class RivalTakeover(val receipt: ReignReceipt) : OneEvent
     data class MessageApproved(val message: OneMessage) : OneEvent
     data class MessageRejected(val reason: String) : OneEvent
+    // Fired when the async moderation call (moderate-message) resolves the
+    // 'reviewing' status it left the message in right after submit - the
+    // fast path that's supposed to take "only a few seconds". Unlike
+    // MessageApproved/MessageRejected above, this must never touch the
+    // compose sheet's own state (composeText, overlay, selectedMessageId):
+    // by the time this arrives the user may have already closed it, or be
+    // mid-draft on something new.
+    data class MessageModerationResolved(val message: OneMessage) : OneEvent
     data class HandleUpdated(val handle: String) : OneEvent
     data class HandleRejected(val reason: String) : OneEvent
     data class RecoveryCodeCreated(val code: String) : OneEvent
@@ -231,4 +239,11 @@ sealed interface ChallengeResult {
     // idempotency key on retry instead of minting a new one, so a request that
     // actually landed server-side can't be double-applied by a retry.
     data class Failure(val reason: String, val retryable: Boolean = false) : ChallengeResult
+}
+
+sealed interface BypassResult {
+    data object Success : BypassResult
+    // Same retryable convention as ChallengeResult.Failure: only a definitive
+    // server answer clears the reserved request id.
+    data class Failure(val reason: String, val retryable: Boolean = false) : BypassResult
 }

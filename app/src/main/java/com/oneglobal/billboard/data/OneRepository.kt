@@ -1,5 +1,6 @@
 package com.oneglobal.billboard.data
 
+import com.oneglobal.billboard.model.BypassResult
 import com.oneglobal.billboard.model.ChallengePhase
 import com.oneglobal.billboard.model.ChallengeResult
 import com.oneglobal.billboard.model.WorldState
@@ -15,7 +16,9 @@ interface OneRepository {
     suspend fun forceRefresh()
     suspend fun submitMessage(text: String)
     suspend fun deleteMessage(id: String)
-    suspend fun bypassTakeRefill(method: String, requestId: String)
+    suspend fun bypassTakeRefill(method: String, requestId: String): BypassResult
+    /** Counts one "ad option was on screen" per refill wait. Best effort; failures are ignored. */
+    suspend fun logAdOfferShown() {}
     fun grantPurchasedCredits(amount: Int)
     fun reportCurrentMessage(reason: String)
     suspend fun blockCurrentOwner()

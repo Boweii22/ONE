@@ -6,6 +6,38 @@ type ReignRecord = {
   previous_reign_id?: string;
 };
 
+const SYSTEM_IDS = new Set([
+  "00000000-0000-0000-0000-000000000001",
+  "00000000-0000-0000-0000-000000000004",
+]);
+
+async function updateTags(appId: string, apiKey: string, externalId: string, tags: Record<string, string>) {
+  const response = await fetch(`https://api.onesignal.com/apps/${appId}/users/by/external_id/${externalId}`, {
+    method: "PATCH",
+    headers: { "Authorization": `Key ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ properties: { tags } }),
+  });
+  return { ok: response.ok, status: response.status, body: await response.json().catch(() => null) };
+}
+
+async function fireCustomEvent(
+  appId: string,
+  apiKey: string,
+  externalId: string,
+  name: string,
+  idempotencyKey: string,
+  properties: Record<string, unknown>,
+) {
+  const response = await fetch(`https://api.onesignal.com/apps/${appId}/custom_events`, {
+    method: "POST",
+    headers: { "Authorization": `Key ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      events: [{ name, external_id: externalId, idempotency_key: idempotencyKey, properties }],
+    }),
+  });
+  return { ok: response.ok, status: response.status, body: await response.json().catch(() => null) };
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return Response.json({ error: "method_not_allowed" }, { status: 405 });
@@ -22,6 +54,8 @@ Deno.serve(async (request) => {
   let newHandle = String(payload?.new_owner_handle ?? "");
   let reignSeconds = Number(payload?.reign_seconds ?? 0);
   let verifiedViews = Number(payload?.verified_views ?? 0);
+  let timesDethroned = Number(payload?.times_dethroned ?? 0);
+  const newOwnerId = String(record.owner_id ?? "");
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -54,6 +88,15 @@ Deno.serve(async (request) => {
       .select("*", { count: "exact", head: true })
       .eq("reign_id", record.previous_reign_id);
     verifiedViews = count ?? 0;
+
+    if (!payload?.times_dethroned) {
+      const { data: previousProfile } = await supabase
+        .from("profiles")
+        .select("times_dethroned")
+        .eq("id", previousOwnerId)
+        .single();
+      timesDethroned = Number(previousProfile?.times_dethroned ?? 0);
+    }
   }
 
   if (!previousOwnerId) return Response.json({ ok: true, ignored: true });
@@ -68,7 +111,7 @@ Deno.serve(async (request) => {
   const handle = newHandle || "Someone";
   const peopleCount = verifiedViews.toLocaleString("en-US");
   const peopleWord = verifiedViews === 1 ? "person" : "people";
-  const response = await fetch("https://api.onesignal.com/notifications", {
+  const pushPromise = fetch("https://api.onesignal.com/notifications", {
     method: "POST",
     headers: {
       "Authorization": `Key ${apiKey}`,
@@ -92,15 +135,49 @@ Deno.serve(async (request) => {
         verified_views: verifiedViews,
       },
     }),
-  });
+  }).then(async (response) => ({ ok: response.ok, status: response.status, body: await response.json().catch(() => null) }));
+
+  // Journey signals: computed from the exact same data as the push above, in
+  // the same execution, so the tag/event and the notification can never
+  // drift out of sync. Skipped for the reserved system account - it's not a
+  // real player and has no push subscription worth targeting.
+  const sideEffects: Promise<unknown>[] = [pushPromise];
+  if (!SYSTEM_IDS.has(previousOwnerId)) {
+    sideEffects.push(
+      updateTags(appId, apiKey, previousOwnerId, {
+        owns_screen: "false",
+        times_dethroned: String(timesDethroned),
+      }),
+      fireCustomEvent(
+        appId,
+        apiKey,
+        previousOwnerId,
+        "lost_the_screen",
+        // The ended reign's id is a natural, unique-per-event idempotency key -
+        // this trigger fires exactly once per reign ending.
+        record.previous_reign_id ?? crypto.randomUUID(),
+        {
+          new_owner_handle: newHandle,
+          reign_seconds: reignSeconds,
+          verified_views: verifiedViews,
+          times_dethroned: timesDethroned,
+        },
+      ),
+    );
+  }
+  if (newOwnerId && !SYSTEM_IDS.has(newOwnerId)) {
+    sideEffects.push(updateTags(appId, apiKey, newOwnerId, { owns_screen: "true" }));
+  }
+
+  const [pushResult, ...journeyResults] = await Promise.allSettled(sideEffects);
 
   // OneSignal can return HTTP 200 even when it matched zero devices (e.g. the
   // account never registered a push subscription) - surface the real body
   // instead of collapsing every 2xx into a bare {ok:true}, so this is
   // debuggable from net._http_response instead of guessing blind.
-  const onesignalResult = await response.json().catch(() => null);
-  if (!response.ok) {
-    return Response.json({ ok: false, onesignal_status: response.status, onesignal_result: onesignalResult }, { status: 502 });
+  const push = pushResult.status === "fulfilled" ? pushResult.value as { ok: boolean; status: number; body: unknown } : null;
+  if (!push || !push.ok) {
+    return Response.json({ ok: false, onesignal_status: push?.status, onesignal_result: push?.body, journey_results: journeyResults }, { status: 502 });
   }
-  return Response.json({ ok: true, onesignal_result: onesignalResult });
+  return Response.json({ ok: true, onesignal_result: push.body, journey_results: journeyResults });
 });

@@ -8,6 +8,7 @@ const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin']
 const anton = Anton({ variable: '--font-display', subsets: ['latin'], weight: '400' });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://oneis.live'),
   title: 'ONE — The Only Live Screen',
   description: 'One person owns it. Everyone can see it. Anyone in the Android app can steal it.',
   icons: {

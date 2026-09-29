@@ -9,9 +9,6 @@ captures/
 *.jks
 *.keystore
 keystore.properties
-.env
-.env.*
-!.env.example
 !web/.env.example
 web/node_modules/
 web/dist/
@@ -29,3 +26,21 @@ replay_pid*.log
 *.tar.gz
 hall-*.xml
 window.xml
+
+.projects/cache
+.projects/vault
+.projects/state.test.json
+.projects/state.local.test.json
+.env
+.env.*
+!.env.example
+
+# Local AI-tool skill bundles, not project source.
+.claude/
+.agents/
+.cursor/
+.cursorignore
+.windsurf/
+skills/
+skills-lock.json
+tmp/

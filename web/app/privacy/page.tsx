@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 export const metadata = {
   title: 'Privacy Policy — ONE',
   description: 'How ONE collects, uses, shares and deletes data.',
@@ -11,7 +9,7 @@ export default function PrivacyPolicy() {
   return (
     <main className="legal-shell">
       <div className="legal-wrap">
-        <nav className="legal-nav"><Link href="/" className="brand"><strong>1</strong><span>ONE</span></Link><Link href="/">BACK TO LIVE SCREEN</Link></nav>
+        <nav className="legal-nav"><a href="https://oneis.live/" className="brand"><strong>1</strong><span>ONE</span></a><a href="https://oneis.live/">BACK TO LIVE SCREEN</a></nav>
         <div className="legal-kicker">PUBLIC POLICY / VERSION 1.0</div>
         <h1>PRIVACY,<br />WITHOUT FOG.</h1>
         <div className="legal-meta"><span>EFFECTIVE 2 SEPTEMBER 2026</span><span>ONE / ANDROID + WEB</span></div>
@@ -24,8 +22,8 @@ export default function PrivacyPolicy() {
         <section className="legal-card"><h2>Why we use data</h2><p>We use this data to create your anonymous identity; operate the live screen and race-safe takeovers; count legitimate views; provide purchases and alerts; read and investigate feedback; moderate, investigate reports, block abuse and enforce our rules; prevent fraud; maintain reliability; and comply with law.</p></section>
         <section className="legal-card"><h2>Service providers</h2><p>ONE relies on Supabase for authentication, database and backend services; Google Play for Android distribution and billing; RevenueCat for purchase and entitlement processing; OneSignal for push notifications; and our website hosting provider for the public spectator. These providers process limited data under their own privacy terms. We do not sell personal data. ONE currently contains no third-party advertising; this policy and the Play declaration will be updated before that changes.</p></section>
         <section className="legal-card"><h2>What we do not request</h2><p>ONE does not require your legal name, email, phone number, contacts, precise location, camera, microphone or photo library. The game is intended for people aged 18 or older.</p></section>
-        <section className="legal-card"><h2>Retention and deletion</h2><p>Active account data is kept while your anonymous account exists and only as long as reasonably needed to operate, secure and comply with legal obligations. You can delete the account inside the app under <strong>YOU → DELETE ACCOUNT</strong>. Your profile, handle, message library, reactions, reports, blocks, credits and session are removed. Historical reign records are retained only in anonymised form as <strong>@DELETED</strong> so the shared ledger cannot be secretly rewritten. Limited fraud, transaction, safety or legal records may be retained where required.</p><Link className="delete-cta" href="/delete-account">DELETE-ACCOUNT INSTRUCTIONS</Link></section>
-        <section className="legal-card"><h2>Your choices</h2><p>You can keep the generated alias, choose a public handle, disable notifications in Android settings, block other users, report content, clear your block list, or delete your account. To ask a privacy question or request help, email <a href={`mailto:${email}`}>{email}</a>.</p></section>
+        <section className="legal-card"><h2>Retention and deletion</h2><p>Active account data is kept while your anonymous account exists and only as long as reasonably needed to operate, secure and comply with legal obligations. You can delete the account inside the app under <strong>YOU → DELETE ACCOUNT</strong>. Your profile, handle, message library, reactions, reports, blocks, credits and session are removed. Historical reign records are retained only in anonymised form as <strong>@DELETED</strong> so the shared ledger cannot be secretly rewritten. Limited fraud, transaction, safety or legal records may be retained where required.</p><a className="delete-cta" href="https://oneis.live/delete-account">DELETE-ACCOUNT INSTRUCTIONS</a></section>
+        <section className="legal-card"><h2>Your choices</h2><p>You can keep the generated alias, choose a public handle, disable notifications in Android settings, block other users, report content, clear your block list, or delete your account. To ask a privacy question or request help, email <a href={`mailto:${email}`}>{email}</a>. See also the <a href="https://oneis.live/terms">ONE Terms of Service</a>.</p></section>
         <section className="legal-card"><h2>Security and changes</h2><p>We use access controls, server-authoritative actions and moderation safeguards, but no online service can promise absolute security. Material policy changes will be published on this page with a revised effective date.</p></section>
       </div>
     </main>

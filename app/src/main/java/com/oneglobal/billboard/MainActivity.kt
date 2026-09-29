@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
                     onIdentifyUser = ::identifyUser,
                     onOpenPrivacy = { openUrl("${BuildConfig.ONE_WEB_URL}/privacy") },
                     onOpenDeletionHelp = { openUrl("${BuildConfig.ONE_WEB_URL}/delete-account") },
+                    onBuyOnWeb = ::buyOnWeb,
                 )
             }
         }
@@ -122,6 +123,7 @@ class MainActivity : ComponentActivity() {
             override fun onClick(event: INotificationClickEvent) {
                 val destination = event.notification.additionalData?.optString("destination")
                 if (destination == "revenge") openLiveChallengeWhenConnected()
+                if (destination == "message_library") viewModel.selectTab(com.oneglobal.billboard.model.MainTab.LIBRARY)
             }
         })
     }
@@ -312,10 +314,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun watchAd() {
+        // Reserved before the ad is even shown, not after it verifies - if the
+        // redemption call drops mid-flight, retrying watchAd() reuses this same
+        // id instead of risking an already-verified reward being lost.
+        val requestId = viewModel.reserveAdBypassRequestId()
         rewardedAds.show(
             activity = this,
             status = { message -> viewModel.showToast(message) },
-            verified = { viewModel.redeemAdReward() },
+            verified = { viewModel.redeemAdReward(requestId) },
         )
     }
 
@@ -344,5 +350,18 @@ class MainActivity : ComponentActivity() {
 
     private fun openUrl(url: String) {
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
+
+    // The app already knows the signed-in user's real RevenueCat app_user_id,
+    // so it's baked into the link here - nobody visiting from this button
+    // ever has to know or type their own ID.
+    private fun buyOnWeb() {
+        if (BuildConfig.ONE_WEB_FUNNEL_URL.isBlank()) return
+        val userId = viewModel.world.value.currentUserId
+        if (userId.isBlank()) {
+            viewModel.showToast("Your ONE identity is still loading. Try again in a moment.")
+            return
+        }
+        openUrl("${BuildConfig.ONE_WEB_FUNNEL_URL}?app_user_id=${Uri.encode(userId)}")
     }
 }

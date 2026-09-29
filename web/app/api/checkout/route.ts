@@ -17,8 +17,8 @@ export async function POST(request: Request) {
     const user = await result.json() as { id?: string; is_anonymous?: boolean };
     if (!user.id || user.is_anonymous !== false) return Response.json({ error: 'Protect your ONE account with Google before buying on the web.' }, { status: 403, headers });
     const destination = new URL(funnel);
-    if (destination.protocol !== 'https:' || destination.username || destination.password || destination.search || destination.hash) throw new Error('Invalid funnel URL');
-    destination.pathname = `${destination.pathname.replace(/\/$/, '')}/${encodeURIComponent(user.id)}`;
+    if (destination.protocol !== 'https:' || destination.username || destination.password || destination.hash) throw new Error('Invalid funnel URL');
+    destination.searchParams.set('app_user_id', user.id);
     return Response.json({ url: destination.toString() }, { headers });
   } catch {
     return Response.json({ error: 'Checkout could not be opened. Please try again.' }, { status: 503, headers });

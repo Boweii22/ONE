@@ -18,13 +18,16 @@ Implemented in Android:
 1. Verify identity ID, handle, reigns, Hall, and balance before/after Google linking, Play update, process death, Google cancellation, refresh failure and cross-device restore. Do not uninstall an unlinked identity to test upgrades.
 2. Android challenge URL handling exists, but automatic App Link opening needs the website's `/.well-known/assetlinks.json` using the Play signing SHA-256. Without domain verification Android may keep opening the website.
 
-## Remaining integrations — do not advertise as shipped
-- See `MONETIZATION-SETUP.md`. The owner confirmed on September 6 that AdMob IDs and the RevenueCat Funnel have not yet been created. Both the rewarded-ad UI (challenge sheet "WATCH AN AD" choice) and the website's Google sign-in + "BUY ONE CREDITS" checkout button now exist in code, gated inert behind those missing dashboard IDs. Activation and end-to-end monetization remain pending.
-- AdMob app ID, rewarded unit ID, consent setup, RevenueCat AdMob adapter and SSV rule. Configure https://api.revenuecat.com/v1/incoming-webhooks/admob-ssv-rewarded.
-- Ad skips use a separate `ad_skip_available` flag on the profile (migration `202609060002_ad_skip_rewards.sql`), never client-side ONE Credits, per `ECONOMY.md`. `grant_ad_skip` is idempotent and capped at 3/UTC day; `take_one` consumes the flag only on a successful takeover. This migration has NOT been applied remotely yet — run `supabase db push`.
-- The RevenueCat AdMob adapter's own client-observed reward verification (`rewardVerificationCompleted`) is what triggers `grant_ad_skip` today. There is still no independent server-side AdMob SSV check on our backend.
-- RevenueCat Funnel URL, Stripe/RevenueCat product mapping and Google provider enablement in Supabase Auth. Web purchases must be reconciled server-side exactly once. Do not add a mobile external-purchase CTA without checking Play policy/region eligibility.
-- Update privacy policy and Play Data Safety for optional Google authentication, public photos, country and advertising before rollout.
+## Status update (September)
+Both AdMob rewarded ads and the RevenueCat web funnel are now live, not pending. `local.properties` has real AdMob dashboard IDs; the challenge sheet's "WATCH AN AD" choice and the website's Google sign-in + "BUY ONE CREDITS" checkout are both active in production (oneis.live), with one real Stripe purchase confirmed end to end.
+
+The ad-skip system described below was superseded by `bypass_take_refill` (`supabase/migrations/202609090001_take_balance_system.sql`) — `grant_ad_skip` and the `ad_skip_available` profile flag it references no longer exist; see `MONETIZATION-SETUP.md` for the current design. Ad takes are now granted only by `grant_verified_ad_bypass` (migration `202609260001_verified_ad_bypass.sql`), which is executable by the service role only. `bypass_take_refill` refuses method `'ad'` from clients and serves credits only. The grant is idempotent (deduped on `take_bypass_requests.request_id`), capped via `app_settings.take_ad_bypass_daily_cap` (default 2/UTC day), and only fires when a refill wait is actually in progress.
+
+On server verification: an earlier version of this note said the client's `verifiedReward` check was sufficient. That was wrong — the RPC trusted whatever method string the client sent. Now: AdMob SSV → RevenueCat verifies and credits 1 `ADTAKE` virtual currency → the `redeem-ad-reward` Edge Function spends 1 `ADTAKE` via RevenueCat REST API v2 (idempotent per request) → only then calls `grant_verified_ad_bypass`; on any failure it refunds the unit. Requires the AdMob SSV callback URL, the RevenueCat Ads → Rewards rule granting `ADTAKE`, and the function secrets in `MONETIZATION-SETUP.md`. Not yet tested end to end on a device. Counters: `select * from public.ad_funnel_summary;` (migration `202609260002_ad_funnel_counters.sql`).
+
+## Remaining
+- RevenueCat Funnel URL, Stripe/RevenueCat product mapping and Google provider enablement in Supabase Auth are done. Continue reconciling web purchases server-side exactly once as volume grows. Do not add a mobile external-purchase CTA without checking Play policy/region eligibility.
+- Update privacy policy and Play Data Safety for optional Google authentication, public photos, country and advertising before rollout, if not already covered by the current privacy policy.
 
 ## Gameplay migration
 Three introductory wins: first and second impose no cooldown, third starts 90 seconds; fourth starts 240 seconds; subsequent wins start 720 seconds. Resets after 1800 seconds since last win (not last screen tap). Settings are server-controlled. Reaction cap raised from 3 to 20 per ten seconds under the existing per-user lock.

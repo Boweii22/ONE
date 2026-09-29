@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Ban, Check, Clock3, Flag, LogOut, Power, Radio, ShieldCheck, Users, X } from 'lucide-react';
+import { AlertTriangle, Ban, Check, Clock3, Copy, Flag, LogOut, Power, Radio, ShieldCheck, Trophy, Users, X } from 'lucide-react';
 import './moderation.css';
 
 // These are public browser credentials. Sites runtime variables are not available
@@ -36,6 +36,30 @@ type QueueItem = {
 type Action = 'dismiss' | 'remove' | 'ban';
 
 type PendingAction = { item: QueueItem; action: Action; deadline: number };
+
+type PendingMessageItem = {
+  message_id: string;
+  text: string;
+  created_at_ms: number;
+  author_id: string;
+  author_handle: string;
+  is_authors_first_review: boolean;
+};
+
+type PendingTesterItem = {
+  id: string;
+  email: string;
+  name: string | null;
+  device: string;
+  created_at_ms: number;
+};
+
+type ReferralItem = {
+  code: string;
+  label: string;
+  signups: number;
+  created_at_ms: number;
+};
 
 async function rpc<T>(name: string, body: object, token: string): Promise<T> {
   if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('backend_not_configured');
@@ -76,8 +100,17 @@ export default function ModerationConsole() {
   const [handle, setHandle] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [killSwitch, setKillSwitch] = useState(false);
+  const [queueView, setQueueView] = useState<'reports' | 'messages' | 'testers' | 'referrals'>('reports');
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [pending, setPending] = useState<Record<string, PendingAction>>({});
+  const [pendingMessages, setPendingMessages] = useState<PendingMessageItem[]>([]);
+  const [decidingMessageId, setDecidingMessageId] = useState<string | null>(null);
+  const [pendingTesters, setPendingTesters] = useState<PendingTesterItem[]>([]);
+  const [approvingTesterId, setApprovingTesterId] = useState<string | null>(null);
+  const [referrals, setReferrals] = useState<ReferralItem[]>([]);
+  const [newReferralCode, setNewReferralCode] = useState('');
+  const [newReferralLabel, setNewReferralLabel] = useState('');
+  const [creatingReferral, setCreatingReferral] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -138,6 +171,97 @@ export default function ModerationConsole() {
     }
   }, [token]);
 
+  const loadPendingMessages = useCallback(async () => {
+    if (!token) return;
+    try {
+      const items = await rpc<PendingMessageItem[]>('pending_messages_queue', {}, token);
+      setPendingMessages(items);
+    } catch {
+      // transient network hiccup — keep showing the last known queue
+    }
+  }, [token]);
+
+  const decideMessage = useCallback(async (item: PendingMessageItem, verdict: 'approved' | 'rejected') => {
+    if (!token) return;
+    setDecidingMessageId(item.message_id);
+    try {
+      await rpc('moderate_pending_message', { p_message_id: item.message_id, p_verdict: verdict }, token);
+      setPendingMessages((prev) => prev.filter((entry) => entry.message_id !== item.message_id));
+      showToast(verdict === 'approved' ? 'Approved.' : 'Rejected.');
+    } catch {
+      showToast(`${verdict === 'approved' ? 'APPROVE' : 'REJECT'} failed — still in the queue.`, true);
+    } finally {
+      setDecidingMessageId(null);
+    }
+  }, [token, showToast]);
+
+  const loadPendingTesters = useCallback(async () => {
+    if (!token) return;
+    try {
+      const items = await rpc<PendingTesterItem[]>('pending_testers_queue', {}, token);
+      setPendingTesters(items);
+    } catch {
+      // transient network hiccup — keep showing the last known queue
+    }
+  }, [token]);
+
+  const approveTester = useCallback(async (item: PendingTesterItem) => {
+    if (!token) return;
+    setApprovingTesterId(item.id);
+    try {
+      await rpc('approve_tester_invite', { p_id: item.id }, token);
+      setPendingTesters((prev) => prev.filter((entry) => entry.id !== item.id));
+      showToast(`Invite sent to ${item.email}.`);
+    } catch {
+      showToast('Approve failed — still in the queue.', true);
+    } finally {
+      setApprovingTesterId(null);
+    }
+  }, [token, showToast]);
+
+  const loadReferrals = useCallback(async () => {
+    if (!token) return;
+    try {
+      const items = await rpc<ReferralItem[]>('referral_leaderboard', {}, token);
+      setReferrals(items);
+    } catch {
+      // transient network hiccup — keep showing the last known leaderboard
+    }
+  }, [token]);
+
+  const createReferral = useCallback(async (event: React.SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token) return;
+    const code = newReferralCode.trim().toLowerCase();
+    const label = newReferralLabel.trim();
+    if (!/^[a-z0-9-]{2,32}$/.test(code) || !label) {
+      showToast('Use a short code (letters, numbers, dashes) and a name.', true);
+      return;
+    }
+    setCreatingReferral(true);
+    try {
+      await rpc('create_referral_code', { p_code: code, p_label: label }, token);
+      setNewReferralCode('');
+      setNewReferralLabel('');
+      showToast(`Link created for ${label}.`);
+      void loadReferrals();
+    } catch {
+      showToast('Could not create that link — code may already be taken.', true);
+    } finally {
+      setCreatingReferral(false);
+    }
+  }, [token, newReferralCode, newReferralLabel, showToast, loadReferrals]);
+
+  const copyReferralLink = useCallback(async (code: string) => {
+    const link = `https://oneis.live/?ref=${code}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      showToast('Link copied.');
+    } catch {
+      showToast(link);
+    }
+  }, [showToast]);
+
   const loadKillSwitch = useCallback(async () => {
     if (!token || !SUPABASE_URL || !SUPABASE_KEY) return;
     try {
@@ -153,11 +277,11 @@ export default function ModerationConsole() {
 
   useEffect(() => {
     if (phase !== 'staff') return;
-    void (async () => { await loadQueue(); await loadKillSwitch(); })();
-    const poll = setInterval(() => { void loadQueue(); void loadKillSwitch(); }, QUEUE_POLL_MS);
+    void (async () => { await loadQueue(); await loadPendingMessages(); await loadPendingTesters(); await loadReferrals(); await loadKillSwitch(); })();
+    const poll = setInterval(() => { void loadQueue(); void loadPendingMessages(); void loadPendingTesters(); void loadReferrals(); void loadKillSwitch(); }, QUEUE_POLL_MS);
     const clock = setInterval(() => setNow(Date.now()), 1000);
     return () => { clearInterval(poll); clearInterval(clock); };
-  }, [phase, loadQueue, loadKillSwitch]);
+  }, [phase, loadQueue, loadPendingMessages, loadPendingTesters, loadReferrals, loadKillSwitch]);
 
   const signIn = () => {
     if (!SUPABASE_URL) return;
@@ -282,24 +406,37 @@ export default function ModerationConsole() {
       </header>
 
       <div className="mod-inner">
-        <div className="mod-hero">
-          <div className="mod-hero-eyebrow"><i />LIVE REPORT QUEUE</div>
-          <h1>THE <em>SCREEN,</em><br />WATCHED.</h1>
-        </div>
-
-        <div className={`mod-kill${killSwitch ? ' active' : ''}`}>
-          <div className="mod-kill-icon"><Power /></div>
-          <div className="mod-kill-label">
-            <strong>GLOBAL KILL SWITCH</strong>
-            <span>{killSwitch ? 'ONE IS PAUSED — NOBODY CAN TAKE THE SCREEN' : 'ONE IS LIVE AND TAKEABLE'}</span>
+        <section className="mod-overview">
+          <div className="mod-hero">
+            <div className="mod-hero-eyebrow"><i />ONE / TRUST &amp; SAFETY</div>
+            <h1>Keep ONE <em>worth watching.</em></h1>
+            <p>A little care. A better screen. Review what needs you.</p>
           </div>
-          <button type="button" className={`mod-toggle${killSwitch ? ' on' : ''}`} onClick={() => void toggleKillSwitch()} aria-label="Toggle global kill switch"><i /></button>
-        </div>
+            <div className={`mod-kill${killSwitch ? ' active' : ''}`}>
+              <div className="mod-kill-icon"><Power /></div>
+              <div className="mod-kill-label">
+                <strong>{killSwitch ? 'Screen paused' : 'Screen is open'}</strong>
+                <span>{killSwitch ? 'Takeovers are disabled. Switch off to resume.' : 'Global pause is off. Takeovers are enabled.'}</span>
+              </div>
+              <button type="button" className={`mod-toggle${killSwitch ? ' on' : ''}`} onClick={() => void toggleKillSwitch()} role="switch" aria-checked={killSwitch} aria-label="Pause all screen takeovers"><i /></button>
+            </div>
+        </section>
 
-        <div className="mod-stats">
-          <div className="mod-stat"><Flag /><div><strong>{items.length}</strong><span>UNRESOLVED</span></div></div>
-          <div className={`mod-stat${autoPulledCount > 0 ? ' warn' : ''}`}><AlertTriangle /><div><strong>{autoPulledCount}</strong><span>AUTO-PULLED</span></div></div>
-        </div>
+        <nav className="mod-toolbar" aria-label="Moderation queues">
+          <div className="mod-tabs">
+            <button type="button" className="mod-tab" aria-pressed={queueView === 'reports'} aria-controls="report-queue" onClick={() => setQueueView('reports')}><Flag />Reports <b>{items.length}</b></button>
+            <button type="button" className="mod-tab" aria-pressed={queueView === 'messages'} aria-controls="message-queue" onClick={() => setQueueView('messages')}><Clock3 />Messages <b>{pendingMessages.length}</b></button>
+            <button type="button" className="mod-tab" aria-pressed={queueView === 'testers'} aria-controls="tester-queue" onClick={() => setQueueView('testers')}><Users />Testers <b>{pendingTesters.length}</b></button>
+            <button type="button" className="mod-tab" aria-pressed={queueView === 'referrals'} aria-controls="referral-queue" onClick={() => setQueueView('referrals')}><Trophy />Referrals <b>{referrals.length}</b></button>
+          </div>
+          <span className={`mod-auto-count${autoPulledCount ? ' warn' : ''}`}><AlertTriangle />{autoPulledCount} auto-pulled</span>
+        </nav>
+
+        <section id="report-queue" className="mod-queue-section" hidden={queueView !== 'reports'} aria-label="Reported reigns">
+          <header className="mod-section-head">
+            <div><h2>Reported reigns</h2></div>
+            <b>{items.length} OPEN</b>
+          </header>
 
         {items.length === 0 ? (
           <div className="mod-empty">
@@ -308,7 +445,7 @@ export default function ModerationConsole() {
             <span>Nothing waiting on you right now. New reports show up here within a few seconds.</span>
           </div>
         ) : (
-          <div className="mod-list">
+          <div className="mod-list mod-report-list">
             {items.map((item, index) => {
               const activePending = pending[item.reign_id];
               if (activePending) {
@@ -357,13 +494,133 @@ export default function ModerationConsole() {
             })}
           </div>
         )}
+        </section>
+
+        <section id="message-queue" className="mod-queue-section" hidden={queueView !== 'messages'} aria-label="Pending messages">
+          <header className="mod-section-head">
+            <div><h2>Pending messages</h2></div>
+            <b>{pendingMessages.length} OPEN</b>
+          </header>
+
+        {pendingMessages.length === 0 ? (
+          <div className="mod-empty">
+            <ShieldCheck />
+            <strong>NOTHING WAITING</strong>
+            <span>Every submitted message has either auto-cleared or been decided.</span>
+          </div>
+        ) : (
+          <div className="mod-list mod-message-list">
+            {pendingMessages.map((item, index) => (
+              <article key={item.message_id} className="mod-card mod-pending-card" style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}>
+                {item.is_authors_first_review && <div className="mod-pulled-tag"><AlertTriangle /> AUTHOR&apos;S FIRST MESSAGE</div>}
+                <div className="mod-card-head">
+                  <div className="mod-owner-chip">
+                    <span className="mod-avatar">{item.author_handle.replace('@', '').slice(0, 1) || '1'}</span>
+                    <strong>{item.author_handle}</strong>
+                  </div>
+                  <span className="mod-when"><Clock3 /> {timeAgo(item.created_at_ms, now)}</span>
+                </div>
+                <blockquote className="mod-message">&ldquo;{item.text}&rdquo;</blockquote>
+                <div className="mod-actions mod-message-actions">
+                  <button type="button" className="mod-btn dismiss" disabled={decidingMessageId === item.message_id} onClick={() => void decideMessage(item, 'approved')}><Check /> APPROVE</button>
+                  <button type="button" className="mod-btn remove" disabled={decidingMessageId === item.message_id} onClick={() => void decideMessage(item, 'rejected')}><X /> REJECT</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+        </section>
+
+        <section id="tester-queue" className="mod-queue-section" hidden={queueView !== 'testers'} aria-label="Pending testers">
+          <header className="mod-section-head">
+            <div><h2>Pending testers</h2></div>
+            <b>{pendingTesters.length} WAITING</b>
+          </header>
+
+        {pendingTesters.length === 0 ? (
+          <div className="mod-empty">
+            <ShieldCheck />
+            <strong>NOTHING WAITING</strong>
+            <span>Everyone who signed up has already been approved.</span>
+          </div>
+        ) : (
+          <div className="mod-list mod-message-list">
+            {pendingTesters.map((item, index) => (
+              <article key={item.id} className="mod-card mod-pending-card" style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}>
+                <div className="mod-card-head">
+                  <div className="mod-owner-chip">
+                    <span className="mod-avatar">{(item.name || item.email).slice(0, 1).toUpperCase()}</span>
+                    <strong>{item.name || item.email}</strong>
+                  </div>
+                  <span className="mod-when"><Clock3 /> {timeAgo(item.created_at_ms, now)}</span>
+                </div>
+                <blockquote className="mod-message">{item.email} — {item.device}</blockquote>
+                <div className="mod-actions mod-message-actions">
+                  <button type="button" className="mod-btn dismiss" disabled={approvingTesterId === item.id} onClick={() => void approveTester(item)}><Check /> APPROVE — SEND INVITE</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+        </section>
+
+        <section id="referral-queue" className="mod-queue-section" hidden={queueView !== 'referrals'} aria-label="Referral leaderboard">
+          <header className="mod-section-head">
+            <div><h2>Referral leaderboard</h2></div>
+            <b>{referrals.reduce((sum, item) => sum + item.signups, 0)} SIGNUPS</b>
+          </header>
+
+          <form className="mod-referral-form" onSubmit={(event) => void createReferral(event)}>
+            <input
+              type="text"
+              placeholder="code (e.g. alex)"
+              value={newReferralCode}
+              onChange={(event) => setNewReferralCode(event.target.value)}
+              maxLength={32}
+            />
+            <input
+              type="text"
+              placeholder="name (e.g. Alex)"
+              value={newReferralLabel}
+              onChange={(event) => setNewReferralLabel(event.target.value)}
+              maxLength={80}
+            />
+            <button type="submit" className="mod-btn dismiss" disabled={creatingReferral}><Trophy /> CREATE LINK</button>
+          </form>
+
+          {referrals.length === 0 ? (
+            <div className="mod-empty">
+              <Trophy />
+              <strong>NO LINKS YET</strong>
+              <span>Create a named link above for each person you want to track.</span>
+            </div>
+          ) : (
+            <div className="mod-list mod-message-list">
+              {referrals.map((item, index) => (
+                <article key={item.code} className="mod-card mod-pending-card" style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}>
+                  <div className="mod-card-head">
+                    <div className="mod-owner-chip">
+                      <span className="mod-avatar">{index === 0 && item.signups > 0 ? '🏆' : item.label.slice(0, 1).toUpperCase()}</span>
+                      <strong>{item.label}</strong>
+                    </div>
+                    <span className="mod-when">{item.signups} signup{item.signups === 1 ? '' : 's'}</span>
+                  </div>
+                  <blockquote className="mod-message">oneis.live/?ref={item.code}</blockquote>
+                  <div className="mod-actions mod-message-actions">
+                    <button type="button" className="mod-btn dismiss" onClick={() => void copyReferralLink(item.code)}><Copy /> COPY LINK</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
 
       {toast && (
-        <div className={`mod-toast${toast.error ? ' error' : ''}`}>
+        <output className={`mod-toast${toast.error ? ' error' : ''}`}>
           {toast.error ? <AlertTriangle /> : <Check />}
           {toast.text}
-        </div>
+        </output>
       )}
     </main>
   );

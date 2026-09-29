@@ -1,8 +1,16 @@
 package com.oneglobal.billboard.ui
 
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.oneglobal.billboard.BuildConfig
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Flag
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -168,6 +176,7 @@ fun OneApp(
     onIdentifyUser: (String) -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenDeletionHelp: () -> Unit,
+    onBuyOnWeb: () -> Unit,
 ) {
     val world by viewModel.world.collectAsStateWithLifecycle()
     val ui by viewModel.ui.collectAsStateWithLifecycle()
@@ -319,6 +328,7 @@ fun OneApp(
                     onOpenVault = viewModel::openVault,
                     onInfo = viewModel::openHowItWorks,
                     onWatchAd = onWatchAd,
+                    onAdOfferShown = viewModel::adOfferShown,
                     onBypassWithCredits = viewModel::bypassTakeRefillWithCredits,
                 )
                 Overlay.RESTRICTED -> RestrictedOverlay(
@@ -369,6 +379,7 @@ fun OneApp(
                             if (success) viewModel.grantPurchasedCredits(0)
                         }
                     },
+                    onBuyOnWeb = onBuyOnWeb,
                 )
                 Overlay.REPORT -> ReportOverlay(
                     owner = world.reign.owner.handle,
@@ -499,42 +510,63 @@ private fun OnboardingScreen(world: WorldState, onTakeIt: () -> Unit) {
                     Spacer(Modifier.weight(.45f))
                     when (shownPage) {
                         0 -> {
-                            Box(Modifier.size(132.dp).clip(CircleShape).background(color).shadow(28.dp, CircleShape, spotColor = color.copy(alpha = .4f)), contentAlignment = Alignment.Center) {
-                                Text("◉", color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 54.sp)
-                            }
-                            Spacer(Modifier.height(32.dp))
-                            Text("THERE IS\nONE SCREEN.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 39.sp, letterSpacing = (-1.8).sp)
-                            Text("Everyone using ONE sees the same message. There is no feed.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 15.dp, end = 24.dp))
-                        }
-                        1 -> {
-                            if (liveOwnerKnown) {
-                                ProfilePhoto(world.reign.owner, color, Modifier.size(132.dp).shadow(28.dp, CircleShape, spotColor = color.copy(alpha = .4f)))
-                            } else {
-                                Box(Modifier.size(132.dp).clip(CircleShape).background(color.copy(alpha = .3f)), contentAlignment = Alignment.Center) {
-                                    Text("…", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 40.sp)
+                            OnboardingReveal(delayMs = 0, bounce = true) { revealModifier ->
+                                Box(revealModifier.size(132.dp).clip(CircleShape).background(color).shadow(28.dp, CircleShape, spotColor = color.copy(alpha = .4f)), contentAlignment = Alignment.Center) {
+                                    Text("◉", color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 54.sp)
                                 }
                             }
                             Spacer(Modifier.height(32.dp))
-                            Text(
-                                if (liveOwnerKnown) "$handle\nOWNS IT RIGHT NOW." else "SOMEONE OWNS\nIT RIGHT NOW.",
-                                color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 39.sp, lineHeight = 37.sp, letterSpacing = (-1.5).sp,
-                            )
-                            Text("One person holds it at a time. Everyone else is looking at their words.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 15.dp, end = 24.dp))
-                            if (liveOwnerKnown) {
+                            OnboardingReveal(delayMs = 90) { revealModifier ->
+                                Text("THERE IS\nONE SCREEN.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 39.sp, letterSpacing = (-1.8).sp, modifier = revealModifier)
+                            }
+                            OnboardingReveal(delayMs = 170) { revealModifier ->
+                                Text("Everyone using ONE sees the same message. There is no feed.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = revealModifier.padding(top = 15.dp, end = 24.dp))
+                            }
+                        }
+                        1 -> {
+                            OnboardingReveal(delayMs = 0, bounce = true) { revealModifier ->
+                                if (liveOwnerKnown) {
+                                    ProfilePhoto(world.reign.owner, color, revealModifier.size(132.dp).shadow(28.dp, CircleShape, spotColor = color.copy(alpha = .4f)))
+                                } else {
+                                    Box(revealModifier.size(132.dp).clip(CircleShape).background(color.copy(alpha = .3f)), contentAlignment = Alignment.Center) {
+                                        Text("…", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 40.sp)
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(32.dp))
+                            OnboardingReveal(delayMs = 90) { revealModifier ->
                                 Text(
-                                    "“${world.reign.message.text}”",
-                                    color = color, fontWeight = FontWeight.Black, fontSize = 15.sp, lineHeight = 19.sp,
-                                    modifier = Modifier.padding(top = 14.dp, end = 24.dp),
+                                    if (liveOwnerKnown) "$handle\nOWNS IT RIGHT NOW." else "SOMEONE OWNS\nIT RIGHT NOW.",
+                                    color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 39.sp, lineHeight = 37.sp, letterSpacing = (-1.5).sp,
+                                    modifier = revealModifier,
                                 )
+                            }
+                            OnboardingReveal(delayMs = 170) { revealModifier ->
+                                Text("One person holds it at a time. Everyone else is looking at their words.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = revealModifier.padding(top = 15.dp, end = 24.dp))
+                            }
+                            if (liveOwnerKnown) {
+                                OnboardingReveal(delayMs = 250) { revealModifier ->
+                                    Text(
+                                        "“${world.reign.message.text}”",
+                                        color = color, fontWeight = FontWeight.Black, fontSize = 15.sp, lineHeight = 19.sp,
+                                        modifier = revealModifier.padding(top = 14.dp, end = 24.dp),
+                                    )
+                                }
                             }
                         }
                         else -> {
-                            Box(Modifier.size(132.dp).clip(CircleShape).background(color).shadow(28.dp, CircleShape, spotColor = color.copy(alpha = .4f)), contentAlignment = Alignment.Center) {
-                                Text("ϟ", color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 54.sp)
+                            OnboardingReveal(delayMs = 0, bounce = true) { revealModifier ->
+                                Box(revealModifier.size(132.dp).clip(CircleShape).background(color).shadow(28.dp, CircleShape, spotColor = color.copy(alpha = .4f)), contentAlignment = Alignment.Center) {
+                                    Text("ϟ", color = Ink, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 54.sp)
+                                }
                             }
                             Spacer(Modifier.height(32.dp))
-                            Text("SO TAKE\nIT OFF THEM.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 39.sp, letterSpacing = (-1.8).sp)
-                            Text("Your words go up instead. Then someone takes it off you, and you take it back.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 15.dp, end = 24.dp))
+                            OnboardingReveal(delayMs = 90) { revealModifier ->
+                                Text("SO TAKE\nIT OFF THEM.", color = Paper, fontWeight = FontWeight.Black, fontFamily = display, fontSize = 43.sp, lineHeight = 39.sp, letterSpacing = (-1.8).sp, modifier = revealModifier)
+                            }
+                            OnboardingReveal(delayMs = 170) { revealModifier ->
+                                Text("Your words replace theirs, instantly, for everyone watching.", color = Muted, fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp, modifier = revealModifier.padding(top = 15.dp, end = 24.dp))
+                            }
                         }
                     }
                     Spacer(Modifier.weight(.35f))
@@ -560,6 +592,31 @@ private fun OnboardingScreen(world: WorldState, onTakeIt: () -> Unit) {
             else Spacer(Modifier.height(34.dp))
         }
     }
+}
+
+// Staggers each element in on its own beat instead of the whole card arriving
+// at once - `remember` (not `remember(key)`) is deliberate: this composable's
+// call site already lives inside AnimatedContent's per-`shownPage` lambda, so
+// it's freshly created (and its animation freshly starts) every time a new
+// onboarding page is shown, with no extra key needed.
+@Composable
+private fun OnboardingReveal(delayMs: Int, bounce: Boolean = false, content: @Composable (Modifier) -> Unit) {
+    val density = LocalDensity.current
+    val reveal = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(delayMs.toLong())
+        reveal.animateTo(1f, spring(dampingRatio = if (bounce) .55f else .82f, stiffness = if (bounce) 260f else 340f))
+    }
+    content(
+        Modifier.graphicsLayer {
+            alpha = reveal.value.coerceIn(0f, 1f)
+            translationY = with(density) { (1f - reveal.value.coerceIn(0f, 1f)) * 20.dp.toPx() }
+            if (bounce) {
+                scaleX = .82f + reveal.value * .18f
+                scaleY = .82f + reveal.value * .18f
+            }
+        },
+    )
 }
 
 @Composable
@@ -700,9 +757,9 @@ private fun LiveHeader(world: WorldState, accent: Color, onShare: () -> Unit, on
             Text("LIVE WORLD STATE", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = .7.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            CircleAction("◎", onShare)
+            CircleAction(Icons.Filled.Share, "Share", onShare)
             Spacer(Modifier.width(7.dp))
-            CircleAction("⋮", onReport)
+            CircleAction(Icons.Filled.Flag, "Report", onReport)
         }
     }
 }
@@ -729,7 +786,7 @@ private fun LiveMapMessageStage(
     }
 }
 
-private val messageStageSizeSteps = listOf(76.sp, 68.sp, 62.sp, 56.sp, 50.sp, 44.sp, 38.sp, 34.sp, 30.sp, 26.sp)
+private val messageStageSizeSteps = listOf(46.sp, 42.sp, 38.sp, 34.sp, 30.sp, 27.sp, 24.sp, 22.sp, 20.sp, 18.sp)
 
 // Same technique as MessageStage below, generalized: picks the largest size in
 // [sizeSteps] where the widest real word in [text] still fits the available
@@ -891,8 +948,17 @@ private fun AuctionCard(
     offline: Boolean = false,
 ) {
     val hasBalance = world.takeBalance > 0
-    val canTake = protectedSeconds == 0 && hasBalance
     val refillSeconds = rememberCountdownSeconds(world.takeRefillSeconds)
+    // The server only collects a completed refill into a real, spendable
+    // balance inside take_one() itself - it's never applied just by polling
+    // get_one_state(). Gating the button on takeBalance alone would mean
+    // once balance hits zero and the timer finishes, nothing ever calls
+    // take_one() again to collect it: a permanent deadlock. Treating the
+    // countdown reaching zero as takeable too lets the tap through, and
+    // take_one() correctly collects the refill and processes the take in
+    // the same call.
+    val refillComplete = !hasBalance && refillSeconds <= 0
+    val canTake = protectedSeconds == 0 && (hasBalance || refillComplete)
     val targets = LocalTourTargets.current
     Column(Modifier.fillMaxWidth().onGloballyPositioned { targets["TAKE"] = it.boundsInRoot() }) {
         if (!isOwner) {
@@ -916,7 +982,7 @@ private fun AuctionCard(
                     offline -> "⊘  OFFLINE — CAN'T TAKE THE SCREEN"
                     isOwner -> "⚡  BROADCAST YOUR REIGN"
                     protectedSeconds > 0 -> "TAKEOVER LANDS IN ${protectedSeconds}s"
-                    hasBalance -> "⚡  TAKE THE SCREEN"
+                    hasBalance || refillComplete -> "⚡  TAKE THE SCREEN"
                     else -> "NEXT TAKE IN ${refillSeconds}s"
                 },
                 fontWeight = FontWeight.Black,
@@ -929,7 +995,7 @@ private fun AuctionCard(
             when {
                 offline -> "Reconnect to challenge for ONE."
                 isOwner -> "The world is watching your message."
-                hasBalance -> "Challenge ${world.reign.owner.handle} to take ONE."
+                hasBalance || refillComplete -> "Challenge ${world.reign.owner.handle} to take ONE."
                 else -> "Watch an ad or spend credits to skip the wait."
             },
             color = Muted,
@@ -1133,10 +1199,14 @@ private fun HallScreen(world: WorldState, onTakeIt: () -> Unit, offline: Boolean
                         if (isCurrentUser) YourRankDivider()
                         HallRow(entry, sort, isCurrentUser, emphasized = !isCurrentUser && index < 3)
                         Spacer(Modifier.height(if (isCurrentUser) 12.dp else 4.dp))
-                    }
-                    if (gapToNextRank != null && gapToNextRank > 0 && rankAbove != null) {
-                        HallGapCard(gapToNextRank, rankAbove.owner.handle, sort, onTakeIt)
-                        Spacer(Modifier.height(18.dp))
+                        // Rendered immediately after the player's own row, not once
+                        // after the whole list - in the expanded view those are two
+                        // different positions, and a gap card sitting under some
+                        // other, unrelated row reads as broken.
+                        if (isCurrentUser && gapToNextRank != null && gapToNextRank > 0 && rankAbove != null) {
+                            HallGapCard(gapToNextRank, rankAbove.owner.handle, sort, onTakeIt)
+                            Spacer(Modifier.height(18.dp))
+                        }
                     }
                 }
             }
@@ -1453,14 +1523,21 @@ private fun ChallengeOverlay(
     onOpenVault: () -> Unit,
     onInfo: () -> Unit,
     onWatchAd: () -> Unit,
+    onAdOfferShown: () -> Unit,
     onBypassWithCredits: () -> Unit,
 ) {
     val accent = Acid
     val hasBalance = world.takeBalance > 0
     val adBypassReady = BuildConfig.ADMOB_REWARDED_UNIT_ID.isNotBlank() && world.takeAdBypassesRemainingToday > 0
     val canBypassWithCredits = world.credits >= world.takeBypassCreditCost
-    val canAttempt = hasBalance || canBypassWithCredits || adBypassReady
     val refillSeconds = rememberCountdownSeconds(world.takeRefillSeconds)
+    // Same fix as AuctionCard: a completed refill is only ever collected
+    // inside take_one() itself, so the countdown reaching zero must count
+    // as takeable too, or the balance can never leave zero.
+    val refillComplete = !hasBalance && refillSeconds <= 0
+    val adOfferVisible = adBypassReady && !hasBalance && !refillComplete
+    LaunchedEffect(adOfferVisible) { if (adOfferVisible) onAdOfferShown() }
+    val canAttempt = hasBalance || refillComplete || canBypassWithCredits || adBypassReady
     val selected = world.messages.firstOrNull { it.id == ui.selectedMessageId }
     val busy = ui.challengePhase !in listOf(ChallengePhase.IDLE, ChallengePhase.FAILED)
 
@@ -1501,12 +1578,12 @@ private fun ChallengeOverlay(
                 ChallengeChoice(
                     "ϟ",
                     "TAKE BALANCE",
-                    if (hasBalance) "${world.takeBalance} of ${world.takeBalanceCap} held. Never expires." else "Next take in ${refillSeconds}s.",
-                    if (hasBalance) "${world.takeBalance} READY" else "${refillSeconds}s",
+                    if (hasBalance) "${world.takeBalance} of ${world.takeBalanceCap} held. Never expires." else if (refillComplete) "Ready now." else "Next take in ${refillSeconds}s.",
+                    if (hasBalance) "${world.takeBalance} READY" else if (refillComplete) "READY" else "${refillSeconds}s",
                     Acid,
-                    selected = hasBalance,
+                    selected = hasBalance || refillComplete,
                 )
-                if (!hasBalance) {
+                if (!hasBalance && !refillComplete) {
                     Spacer(Modifier.height(10.dp))
                     ChallengeChoice(
                         "ϟ",
@@ -1553,8 +1630,8 @@ private fun ChallengeOverlay(
                                 PrimaryButton("GET ONE CREDITS", Ice, onOpenVault)
                             } else {
                                 HoldToOwnButton(
-                                    text = if (hasBalance) "HOLD TO CONTINUE — FREE" else "BYPASS THE WAIT ABOVE FIRST",
-                                    enabled = hasBalance && selected != null,
+                                    text = if (hasBalance || refillComplete) "HOLD TO CONTINUE — FREE" else "BYPASS THE WAIT ABOVE FIRST",
+                                    enabled = (hasBalance || refillComplete) && selected != null,
                                     onComplete = onBegin,
                                 )
                             }
@@ -2133,6 +2210,7 @@ private fun VaultOverlay(
     onClose: () -> Unit,
     onPurchase: (Int) -> Unit,
     onRestore: () -> Unit,
+    onBuyOnWeb: () -> Unit,
 ) {
     Column(
         Modifier
@@ -2164,6 +2242,12 @@ private fun VaultOverlay(
         Spacer(Modifier.height(14.dp))
         Surface(modifier = Modifier.fillMaxWidth().clickable(enabled = revenueCatReady, onClick = onRestore), color = Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .16f))) {
             Text("↻  RESTORE GOOGLE PLAY PURCHASES", color = if (revenueCatReady) Paper else Muted, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
+        }
+        if (BuildConfig.ONE_WEB_FUNNEL_URL.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onBuyOnWeb), color = Color.Transparent, shape = RoundedCornerShape(7.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .16f))) {
+                Text("⎋  BUY ON THE WEB", color = Paper, fontFamily = mono, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
+            }
         }
     }
 }
@@ -2429,9 +2513,9 @@ private fun BottomNav(selected: MainTab, onSelected: (MainTab) -> Unit, modifier
         verticalAlignment = Alignment.CenterVertically,
     ) {
         NavItem("ϟ", "LIVE", MainTab.LIVE, selected, onSelected)
-        NavItem("♜", "CHALLENGES", MainTab.LIBRARY, selected, onSelected)
-        NavItem("♛", "HALL", MainTab.HALL, selected, onSelected)
-        NavItem("●", "YOU", MainTab.YOU, selected, onSelected)
+        NavItem(Icons.Filled.EmojiEvents, "CHALLENGES", MainTab.LIBRARY, selected, onSelected)
+        NavItem(Icons.Filled.WorkspacePremium, "HALL", MainTab.HALL, selected, onSelected)
+        NavItem(Icons.Filled.Person, "YOU", MainTab.YOU, selected, onSelected)
     }
 }
 
@@ -2451,6 +2535,29 @@ private fun RowScope.NavItem(icon: String, label: String, tab: MainTab, selected
         verticalArrangement = Arrangement.Center,
     ) {
         Text(icon, color = if (active) Acid else Muted, fontWeight = FontWeight.Black, fontSize = 16.sp)
+        Text(label, color = if (active) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = if (label.length > 8) 6.sp else 7.sp, letterSpacing = .3.sp)
+        Spacer(Modifier.height(5.dp))
+        Box(Modifier.width(34.dp).height(2.dp).background(if (active) Acid else Color.Transparent))
+    }
+}
+
+@Composable
+private fun RowScope.NavItem(icon: ImageVector, label: String, tab: MainTab, selected: MainTab, onSelected: (MainTab) -> Unit) {
+    val active = tab == selected
+    val targets = LocalTourTargets.current
+    Column(
+        Modifier
+            .weight(1f)
+            .onGloballyPositioned { targets[tab.name] = it.boundsInRoot() }
+            .fillMaxHeight()
+            .clickable { onSelected(tab) }
+            .background(Color.Transparent)
+            .padding(horizontal = 8.dp, vertical = 9.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(icon, contentDescription = label, tint = if (active) Acid else Muted, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.height(3.dp))
         Text(label, color = if (active) Acid else Muted, fontFamily = mono, fontWeight = FontWeight.Black, fontSize = if (label.length > 8) 6.sp else 7.sp, letterSpacing = .3.sp)
         Spacer(Modifier.height(5.dp))
         Box(Modifier.width(34.dp).height(2.dp).background(if (active) Acid else Color.Transparent))
@@ -3193,6 +3300,13 @@ private fun OwnerMarkLarge(initials: String, accent: Color) {
 private fun CircleAction(text: String, onClick: () -> Unit) {
     Box(Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = .06f)).border(1.dp, Color.White.copy(alpha = .08f), CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Text(text, color = Paper, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun CircleAction(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
+    Box(Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = .06f)).border(1.dp, Color.White.copy(alpha = .08f), CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, contentDescription = contentDescription, tint = Paper, modifier = Modifier.size(18.dp))
     }
 }
 

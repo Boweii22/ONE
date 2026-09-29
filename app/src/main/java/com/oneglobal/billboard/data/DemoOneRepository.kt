@@ -1,5 +1,6 @@
 package com.oneglobal.billboard.data
 
+import com.oneglobal.billboard.model.BypassResult
 import com.oneglobal.billboard.model.ChallengePhase
 import com.oneglobal.billboard.model.ChallengeResult
 import com.oneglobal.billboard.model.HallEntry
@@ -343,21 +344,23 @@ class DemoOneRepository : OneRepository {
         _events.emit(OneEvent.Error(if (target.timesDeployed == 0) "Message deleted." else "Message removed from your library."))
     }
 
-    override suspend fun bypassTakeRefill(method: String, requestId: String) {
+    override suspend fun bypassTakeRefill(method: String, requestId: String): BypassResult {
         delay(if (method == "ad") 2_400 else 300)
-        if (_world.value.takeBalance > 0) return
+        if (_world.value.takeBalance > 0) return BypassResult.Success
         if (method == "ad") {
             val remaining = (_world.value.takeAdBypassesRemainingToday - 1).coerceAtLeast(0)
             _world.update { it.copy(takeBalance = 1, takeRefillSeconds = 0, takeAdBypassesRemainingToday = remaining) }
         } else {
             val cost = _world.value.takeBypassCreditCost
             if (_world.value.credits < cost) {
-                _events.emit(OneEvent.Error("You need ${cost - _world.value.credits} more ONE credits."))
-                return
+                val reason = "You need ${cost - _world.value.credits} more ONE credits."
+                _events.emit(OneEvent.Error(reason))
+                return BypassResult.Failure(reason)
             }
             _world.update { it.copy(takeBalance = 1, takeRefillSeconds = 0, credits = it.credits - cost) }
         }
         _events.emit(OneEvent.TakeRefillBypassed(method))
+        return BypassResult.Success
     }
 
     override fun grantPurchasedCredits(amount: Int) {

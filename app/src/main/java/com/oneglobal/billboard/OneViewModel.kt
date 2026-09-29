@@ -8,6 +8,7 @@ import com.oneglobal.billboard.data.AuctionRules
 import com.oneglobal.billboard.data.CloudOneRepository
 import com.oneglobal.billboard.data.DemoOneRepository
 import com.oneglobal.billboard.data.OneRepository
+import com.oneglobal.billboard.model.BypassResult
 import com.oneglobal.billboard.model.ChallengePhase
 import com.oneglobal.billboard.model.ChallengeResult
 import com.oneglobal.billboard.model.MainTab
@@ -74,6 +75,20 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     is OneEvent.MessageRejected -> _ui.update {
                         it.copy(composeError = event.reason, toast = event.reason)
+                    }
+                    is OneEvent.MessageModerationResolved -> _ui.update {
+                        // Land on CHALLENGES (the message library) so the toast isn't the
+                        // only signal - a resolved message under review is easy to miss
+                        // if the person has since wandered off to another tab.
+                        it.copy(
+                            tab = MainTab.LIBRARY,
+                            selectedMessageId = if (event.message.status == MessageStatus.APPROVED) event.message.id else it.selectedMessageId,
+                            toast = if (event.message.status == MessageStatus.APPROVED) {
+                                "MESSAGE APPROVED // READY TO DEPLOY"
+                            } else {
+                                event.message.rejectionReason ?: "That message wasn't approved."
+                            },
+                        )
                     }
                     is OneEvent.HandleUpdated -> {
                         _ui.update { current ->
@@ -435,12 +450,38 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
         _ui.update { it.copy(overlay = Overlay.VAULT) }
     }
 
-    fun redeemAdReward() {
-        viewModelScope.launch { repository.bypassTakeRefill("ad", UUID.randomUUID().toString()) }
+    // Mirrors pendingChallengeRequestId above: reserved before the side effect
+    // that can outlive a dropped connection (watching the ad) starts, and
+    // reused on retry so a completed-but-unredeemed reward can be recovered
+    // instead of lost. Keyed by method ("ad"/"credits") since both bypass
+    // routes share this same redemption RPC.
+    private val pendingBypassRequestIds = mutableMapOf<String, String>()
+
+    /** Call before showing the ad, so the id exists for the whole watch. */
+    fun reserveAdBypassRequestId(): String =
+        pendingBypassRequestIds.getOrPut("ad") { UUID.randomUUID().toString() }
+
+    fun adOfferShown() {
+        viewModelScope.launch { repository.logAdOfferShown() }
+    }
+
+    fun redeemAdReward(requestId: String) {
+        viewModelScope.launch {
+            val result = repository.bypassTakeRefill("ad", requestId)
+            if (result !is BypassResult.Failure || !result.retryable) {
+                pendingBypassRequestIds.remove("ad")
+            }
+        }
     }
 
     fun bypassTakeRefillWithCredits() {
-        viewModelScope.launch { repository.bypassTakeRefill("credits", UUID.randomUUID().toString()) }
+        val requestId = pendingBypassRequestIds.getOrPut("credits") { UUID.randomUUID().toString() }
+        viewModelScope.launch {
+            val result = repository.bypassTakeRefill("credits", requestId)
+            if (result !is BypassResult.Failure || !result.retryable) {
+                pendingBypassRequestIds.remove("credits")
+            }
+        }
     }
 
     fun grantPurchasedCredits(amount: Int) {

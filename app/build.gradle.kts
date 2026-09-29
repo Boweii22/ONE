@@ -30,9 +30,13 @@ android {
         applicationId = "com.tomribowei.one"
         minSdk = 26
         targetSdk = 36
-        versionCode = 41
-        versionName = "1.0.31"
+        versionCode = 49
+        versionName = "1.0.39"
         buildConfigField("String", "ADMOB_REWARDED_UNIT_ID", "\"" + onePublicValue("ADMOB_REWARDED_UNIT_ID") + "\"")
+        // Comma-separated AdMob-reported device hashes (see logcat: "Use
+        // RequestConfiguration.Builder().setTestDeviceIds(...)"). Only ever
+        // applied in debug builds - see OneApplication.onCreate().
+        buildConfigField("String", "ADMOB_TEST_DEVICE_IDS", "\"" + onePublicValue("ADMOB_TEST_DEVICE_IDS") + "\"")
         manifestPlaceholders["admobAppId"] = onePublicValue("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -43,12 +47,16 @@ android {
         val oneSignalId = onePublicValue("ONESIGNAL_APP_ID")
         val supabaseUrl = onePublicValue("SUPABASE_URL")
         val supabaseAnonKey = onePublicValue("SUPABASE_ANON_KEY")
-        val oneWebUrl = onePublicValue("ONE_WEB_URL", "https://one-global-screen.no1tomcodes.chatgpt.site")
+        val oneWebUrl = onePublicValue("ONE_WEB_URL", "https://oneis.live")
+        val oneWebFunnelUrl = onePublicValue("ONE_WEB_FUNNEL_URL")
         buildConfigField("String", "REVENUECAT_API_KEY", "\"$revenueCatKey\"")
         buildConfigField("String", "ONESIGNAL_APP_ID", "\"$oneSignalId\"")
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
         buildConfigField("String", "ONE_WEB_URL", "\"$oneWebUrl\"")
+        // The RevenueCat-hosted web checkout funnel. Blank until the funnel is
+        // actually live - see MONETIZATION-SETUP.md.
+        buildConfigField("String", "ONE_WEB_FUNNEL_URL", "\"$oneWebFunnelUrl\"")
     }
 
     signingConfigs {
@@ -112,8 +120,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.6")
     debugImplementation("androidx.compose.ui:ui-tooling:1.7.6")
 
-    implementation("com.revenuecat.purchases:purchases:10.15.1")
-    implementation("com.revenuecat.purchases:purchases-admob:10.15.1")
+    implementation("com.revenuecat.purchases:purchases:10.23.2")
+    implementation("com.revenuecat.purchases:purchases-admob:10.23.2")
     implementation("com.google.android.gms:play-services-ads:24.0.0")
     implementation("com.google.android.ump:user-messaging-platform:3.2.0")
     implementation("com.onesignal:OneSignal:5.9.8")

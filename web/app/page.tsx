@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowDown, ArrowRight, Check, Clock3, Eye, Radio, Share2, ShieldCheck, Sparkles, Swords, Users, Zap } from 'lucide-react';
+import { ArrowDown, ArrowRight, Check, Clock3, Download, Eye, Radio, Share2, ShieldCheck, Sparkles, Swords, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type Activity = {
@@ -143,6 +143,12 @@ export default function Home() {
   const [checkoutNotice, setCheckoutNotice] = useState('');
 
   useEffect(() => {
+    // A referral link (oneis.live/?ref=alex) - remembered so it still counts
+    // even if someone browses around before actually signing up.
+    const ref = new URLSearchParams(window.location.search).get('ref');
+    if (ref && /^[a-z0-9-]{2,32}$/i.test(ref)) {
+      try { localStorage.setItem('one_referral_code', ref.toLowerCase()); } catch { /* ignore */ }
+    }
     // Supabase OAuth (implicit flow) returns here with tokens in the URL fragment.
     const hash = window.location.hash;
     if (hash.includes('access_token=')) {
@@ -206,7 +212,7 @@ export default function Home() {
     const observer = new IntersectionObserver((entries) => entries.forEach((entry) => {
       if (entry.isIntersecting) { entry.target.classList.add('revealed'); observer.unobserve(entry.target); }
     }), { threshold: 0.08 });
-    document.querySelectorAll('.mechanics, .manifesto, .tester-section, .screen-reel').forEach((el) => { el.classList.add('reveal-ready'); observer.observe(el); });
+    document.querySelectorAll('.mechanics, .manifesto, .download-section, .tester-section, .screen-reel').forEach((el) => { el.classList.add('reveal-ready'); observer.observe(el); });
     return () => observer.disconnect();
   }, []);
 
@@ -265,14 +271,16 @@ export default function Home() {
     } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) setShareNotice('Copy the link from your address bar.'); }
   };
 
-  const submitTesterInterest = async (event: React.FormEvent<HTMLFormElement>) => {
+  const submitTesterInterest = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setTesterStatus('sending');
     try {
+      let ref = '';
+      try { ref = localStorage.getItem('one_referral_code') || ''; } catch { /* ignore */ }
       const response = await fetch('/api/tester', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...testerForm, company: '' }),
+        body: JSON.stringify({ ...testerForm, company: '', ref }),
       });
       if (!response.ok) throw new Error('tester_interest_failed');
       const result = await response.json() as { emailed?: boolean };
@@ -288,7 +296,7 @@ export default function Home() {
       <div className="grid-glow" aria-hidden="true" />
       <header className="topbar">
         <Link href="/" className="brand" aria-label="ONE home"><strong>1</strong><span>ONE</span></Link>
-        <nav className="main-nav" aria-label="Main navigation"><a href="#live">THE SCREEN</a><a href="#how">THE RULES</a><a href="#join">GET ACCESS ↗</a></nav>
+        <nav className="main-nav" aria-label="Main navigation"><a href="#live">THE SCREEN</a><a href="#how">THE RULES</a><a href="#download">DOWNLOAD ↗</a></nav>
         <div className={`live-pill ${status}`}><i /><span>{status === 'live' ? 'LIVE WORLD STATE' : status.replace('_', ' ')}</span></div>
         <Button variant="outline" className="share-button" onClick={() => void share()}><Share2 /> {shareNotice || 'Share ONE'}</Button>
       </header>
@@ -300,13 +308,14 @@ export default function Home() {
           <h1>THE INTERNET<br />HAS <em>ONE</em><br />SCREEN.</h1>
           <p>One person owns it. Everyone sees it. Anyone can steal it. Your words, in front of the world—until somebody takes your place.</p>
           <div className="hero-actions">
-            <a className="primary-cta" href="#join">JOIN THE CLOSED TEST <ArrowRight /></a>
+            <a className="primary-cta" href="/downloads/ONE-Android-preview.apk" download="ONE-Android-preview.apk">DOWNLOAD APK <Download /></a>
             <a className="ghost-cta" href="#live">WATCH IT LIVE <ArrowDown /></a>
             <button type="button" className="ghost-cta" onClick={() => void buyCredits()} disabled={checkoutBusy}>
               {checkoutBusy ? 'OPENING CHECKOUT…' : webSignedIn ? 'BUY ONE CREDITS' : 'SIGN IN TO BUY CREDITS'} <ArrowRight />
             </button>
           </div>
           {checkoutNotice && <p className="checkout-notice">{checkoutNotice}</p>}
+          {!webSignedIn && !checkoutBusy && <p className="checkout-notice">Use the same Google account you&apos;ve linked in the app, so credits show up there.</p>}
           <div className="hero-proof"><b>BUILT FOR ANDROID</b><span /><b>REAL PEOPLE</b><span /><b>ONE GLOBAL STAGE</b></div>
         </div>
         <div className="phone-theatre" aria-label="Live ONE screen preview">
@@ -407,6 +416,28 @@ export default function Home() {
         <div className="manifesto-note"><Sparkles /> Founding users will shape the rules, culture and chaos of ONE.</div>
       </section>
 
+      <section id="download" className="download-section" aria-labelledby="download-title">
+        <div className="download-copy">
+          <span className="section-kicker">ANDROID / DIRECT ACCESS</span>
+          <h2 id="download-title">PUT ONE<br />IN YOUR <em>POCKET.</em></h2>
+          <p>Download the current Android preview and step onto the only screen everyone shares. No desktop imitation—the real game lives on your phone.</p>
+          <div className="download-trust"><span><ShieldCheck /> Served securely by oneis.live</span><span><Download /> 22.4 MB APK</span></div>
+        </div>
+
+        <div className="download-ticket">
+          <div className="download-ticket-top"><span>ONE / ANDROID PREVIEW</span><b>DIRECT BUILD</b></div>
+          <div className="download-glyph" aria-hidden="true">1</div>
+          <div className="download-ticket-copy"><small>THE WORLD HAS ONE SCREEN.</small><strong>CLAIM<br />YOUR TURN.</strong></div>
+          <a className="apk-download" href="/downloads/ONE-Android-preview.apk" download="ONE-Android-preview.apk">
+            <span><b>DOWNLOAD ONE APK</b><small>Android preview · 22.4 MB</small></span><Download />
+          </a>
+          <p className="sideload-note">Your phone may ask permission to install apps from this browser. Download only from <strong>oneis.live</strong>.</p>
+          <div className="play-store-soon" aria-label="Google Play release coming soon">
+            <span><small>OFFICIAL RELEASE</small><b>GOOGLE PLAY</b></span><em>COMING SOON</em>
+          </div>
+        </div>
+      </section>
+
       <section id="join" className="tester-section" aria-labelledby="tester-title">
         <div className="tester-copy">
           <span className="section-kicker">ANDROID CLOSED TEST</span>
@@ -416,7 +447,7 @@ export default function Home() {
         </div>
         <div className="tester-card">
           {testerStatus === 'sent' ? (
-            <div className="tester-success" role="status"><Check /><span>REQUEST RECEIVED.</span><p>{inviteEmailed ? 'Check your inbox for the next steps. Google Play access requires your account to be on the tester list.' : 'Your interest is saved. We’ll contact you about test access. Use this same Google account on your Android phone.'}</p><a href={PLAY_URL} className="primary-cta">OPEN GOOGLE PLAY <ArrowRight /></a><button type="button" onClick={() => setTesterStatus('idle')}>ADD ANOTHER EMAIL <ArrowRight /></button></div>
+            <output className="tester-success"><Check /><span>REQUEST RECEIVED.</span><p>{inviteEmailed ? 'Check your inbox — you’re on the list. I’ll personally email your Play Store install link once you’re added as a tester.' : 'Your interest is saved. I’ll email your Play Store install link personally once you’re added as a tester.'}</p><button type="button" onClick={() => setTesterStatus('idle')}>ADD ANOTHER EMAIL <ArrowRight /></button></output>
           ) : (
             <form onSubmit={submitTesterInterest}>
               <div className="form-head"><span>TEST ONE BEFORE LAUNCH</span><b>LIMITED PLACES</b></div>
@@ -436,7 +467,7 @@ export default function Home() {
 
       <footer>
         <span>ONE / PUBLIC SPECTATOR</span>
-        <nav aria-label="Legal"><Link href="/privacy">PRIVACY</Link><Link href="/delete-account">DELETE ACCOUNT</Link></nav>
+        <nav aria-label="Legal"><a href="https://oneis.live/privacy">PRIVACY</a><a href="https://oneis.live/terms">TERMS</a><a href="https://oneis.live/delete-account">DELETE ACCOUNT</a></nav>
         <span>EVERY NUMBER ON THIS PAGE COMES FROM THE LIVE LEDGER.</span>
       </footer>
     </main>

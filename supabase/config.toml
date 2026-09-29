@@ -15,3 +15,6 @@ verify_jwt = false
 
 [functions.onesignal-takeover]
 verify_jwt = false
+
+[functions.send-tester-invite]
+verify_jwt = false

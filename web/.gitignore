@@ -37,3 +37,7 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+/.npm-cache-deploy/
+/.sites-package-*/
+/one-site-v*.tar.gz
+/tsconfig.tsbuildinfo
