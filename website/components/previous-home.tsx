@@ -2,7 +2,7 @@
 // Archived pre-launch home. Not imported by the production landing page.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+
 import Image from 'next/image';
 import { ArrowDown, ArrowRight, Check, Clock3, Download, Eye, Radio, Share2, ShieldCheck, Sparkles, Swords, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -296,8 +296,8 @@ export default function Home() {
       <a href="#live" className="skip-link">Skip to the live screen</a>
       <div className="grid-glow" aria-hidden="true" />
       <header className="topbar">
-        <Link href="/" className="brand" aria-label="ONE home"><strong>1</strong><span>ONE</span></Link>
-        <nav className="main-nav" aria-label="Main navigation"><a href="#live">THE SCREEN</a><Link href="/experience">EXPERIENCE</Link><a href="#how">THE RULES</a><a href="#download">DOWNLOAD ↗</a></nav>
+        <a href="/" className="brand" aria-label="ONE home"><strong>1</strong><span>ONE</span></a>
+        <nav className="main-nav" aria-label="Main navigation"><a href="#live">THE SCREEN</a><a href="/experience">EXPERIENCE</a><a href="#how">THE RULES</a><a href="#download">DOWNLOAD ↗</a></nav>
         <div className={`live-pill ${status}`}><i /><span>{status === 'live' ? 'LIVE WORLD STATE' : status.replace('_', ' ')}</span></div>
         <Button variant="outline" className="share-button" onClick={() => void share()}><Share2 /> {shareNotice || 'Share ONE'}</Button>
       </header>

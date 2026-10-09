@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+
 import { ArrowUpRight, ArrowDown, Zap, Play, X, Volume2 } from 'lucide-react';
 import './launch.css';
 import './trump.css';
@@ -165,8 +165,8 @@ export default function Home() {
   return <main className={`one-launch one-trump one-presence ${taken ? 'screen-taken' : ''} ${autoplay && !reducedMotion ? 'auto-running' : 'auto-paused'}`} style={{ '--demo-color': selected.color } as React.CSSProperties}>
     <a className="one-skip" href="#how">Skip to how ONE works</a>
     <header className="one-nav">
-      <Link href="/" className="one-wordmark" aria-label="ONE home"><img src="/one-app-icon.png" alt="" />ONE<span>•</span></Link>
-      <nav aria-label="Main navigation"><Link href="/play">Play in browser</Link><a href="#live">Live screen<span className="one-dot" /></a></nav>
+      <a href="/" className="one-wordmark" aria-label="ONE home"><img src="/one-app-icon.png" alt="" />ONE<span>•</span></a>
+      <nav aria-label="Main navigation"><a href="/play">Play in browser</a><a href="#live">Live screen<span className="one-dot" /></a></nav>
       <PlayLink className="one-nav-download">Get the Android app</PlayLink>
     </header>
 
@@ -224,9 +224,9 @@ export default function Home() {
       <div className="one-live-stage">
         <div className="one-live-owner"><span className="one-live-avatar">{live?.reign.owner.initials || '1'}</span><div><small>{live ? 'CURRENT OWNER' : 'ONE / LIVE VIEW'}</small><strong>{live?.reign.owner.handle || 'THE NEXT WORD IS YOURS.'}</strong></div>{live && <span className="one-reign-number">REIGN #{live.reign.sequence}</span>}</div>
         <blockquote key={live?.reign.sequence}>{live?.reign.message.text || (status.startsWith('Connecting') ? 'TUNING IN.' : 'THE APP IS\nSTILL YOUR WAY IN.')}</blockquote>
-        <div className="one-live-footer">{live ? <><span><small>WATCHING NOW</small><b>{live.live_watchers}</b></span><span><small>CURRENT REIGN</small><b>{time(now - live.reign.started_at_ms)}</b></span><span><small>TAKEOVERS TODAY</small><b>{live.takeovers_today}</b></span></> : <p>No made-up live numbers. The real screen appears here when the connection is available.</p>}<Link className="one-button one-live-cta" href="/play">Open the live game<ArrowUpRight size={20}/></Link></div>
+        <div className="one-live-footer">{live ? <><span><small>WATCHING NOW</small><b>{live.live_watchers}</b></span><span><small>CURRENT REIGN</small><b>{time(now - live.reign.started_at_ms)}</b></span><span><small>TAKEOVERS TODAY</small><b>{live.takeovers_today}</b></span></> : <p>No made-up live numbers. The real screen appears here when the connection is available.</p>}<a className="one-button one-live-cta" href="/play">Open the live game<ArrowUpRight size={20}/></a></div>
       </div>
-      <p className="one-live-note">Watch here. Take the screen in the Android app.</p>
+      <p className="one-live-note">Watch here. Open the live game to play in your browser, or get ONE on Android.</p>
     </section>
 
     <section className="one-inside trump-product one-reveal" ref={productRef}>
@@ -244,7 +244,7 @@ export default function Home() {
     </section>
 
     <section className="one-final" id="download"><span className="one-eyebrow">ONE IS LIVE. NO INVITE NEEDED.</span><h2>WHAT WOULD<br /><span>YOU SAY?</span></h2><PlayLink className="one-final-button"><span className="one-play-symbol" aria-hidden="true">▶</span><span><small>AVAILABLE NOW ON</small>Google Play</span></PlayLink><p>One screen. Your Android. Your turn.</p><div className="one-final-watermark" aria-hidden="true">ONE</div></section>
-    <footer className="one-footer"><Link href="/" className="one-wordmark">ONE</Link><span>Built by Bowei. Made for your next move.</span><nav aria-label="Legal and support"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/delete-account">Delete account</a><a href="mailto:oneglobalscreen@gmail.com">Contact</a></nav></footer>
+    <footer className="one-footer"><a href="/" className="one-wordmark">ONE</a><span>Built by Bowei. Made for your next move.</span><nav aria-label="Legal and support"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/delete-account">Delete account</a><a href="mailto:oneglobalscreen@gmail.com">Contact</a></nav></footer>
 
     {videoOpen && <div className="one-film-modal" role="dialog" aria-modal="true" aria-label="ONE — The Spot film" onClick={e => { if (e.target === e.currentTarget) setVideoOpen(false); }} onKeyDown={e => {
       if (e.key === 'Tab') { const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('button, video')); const first = items[0], last = items[items.length - 1]; if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); } }

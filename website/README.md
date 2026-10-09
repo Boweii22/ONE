@@ -53,6 +53,21 @@ https://one-web.tombribowei01.workers.dev. Cloudflare Builds is connected to
 `Boweii22/ONE`, branch `main`, root directory `website`, using the commands above.
 Changes pushed to `main` trigger a new build and deployment.
 
+## Navigation regression checks
+
+Internal navigation intentionally uses native `<a href>` links. The current
+Vinext build's `next/link` navigation throws during prefetch and click handling
+on the deployed Worker; native links keep routes usable without that router.
+After publishing, click (do not only open the URLs directly):
+
+- Homepage → Play in browser → Google sign-in → `/play` return.
+- Homepage → Live screen, and Open the live game → `/play`.
+- Play → Home, Experience, Privacy, Terms, and Delete account.
+- Experience → Home; legal pages → their return and cross-policy links.
+
+Verify starter selection and takeover separately with an authorized test account.
+Publishing a frontend fix must not change database rollout flags.
+
 `oneis.live` and `www.oneis.live` are connected to the production Worker and
 declared in `wrangler.jsonc` so future deployments retain both domains. Namecheap
 has been switched to `maxine.ns.cloudflare.com` and `nick.ns.cloudflare.com`;

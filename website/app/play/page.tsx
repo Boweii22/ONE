@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+
 import Image from 'next/image';
 import { ArrowDown, ArrowRight, Check, Clock3, Download, Eye, Radio, Share2, ShieldCheck, Sparkles, Swords, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -351,8 +351,8 @@ export default function Home() {
   return (
     <main className="one-shell">
       <header className="topbar">
-        <Link href="/" className="brand" aria-label="ONE home"><strong>1</strong><span>ONE</span></Link>
-        <nav className="main-nav" aria-label="Main navigation"><Link href="/">HOME</Link><Link href="/experience">EXPERIENCE</Link><a href={PLAY_URL}>GET THE ANDROID APP ↗</a></nav>
+        <a href="/" className="brand" aria-label="ONE home"><strong>1</strong><span>ONE</span></a>
+        <nav className="main-nav" aria-label="Main navigation"><a href="/">HOME</a><a href="/experience">EXPERIENCE</a><a href={PLAY_URL}>GET THE ANDROID APP ↗</a></nav>
       </header>
       <section id="live" className="live-wrapper">
         <div className="section-intro"><span>01 / THE GLOBAL SCREEN</span><h2>RIGHT NOW.<br /><em>ONE OWNER.</em></h2><p>Same screen. Same message. Anywhere on Earth. This is the live reign from the app.</p></div>
@@ -439,7 +439,7 @@ export default function Home() {
 
       <footer>
         <span>ONE / LIVE SCREEN</span>
-        <nav aria-label="Legal"><Link href="/privacy">PRIVACY</Link><Link href="/terms">TERMS</Link><Link href="/delete-account">DELETE ACCOUNT</Link></nav>
+        <nav aria-label="Legal"><a href="/privacy">PRIVACY</a><a href="/terms">TERMS</a><a href="/delete-account">DELETE ACCOUNT</a></nav>
       </footer>
     </main>
   );
