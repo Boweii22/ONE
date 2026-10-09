@@ -34,7 +34,11 @@ type OneState = {
   };
   activity: Activity[];
   reactions: Reaction[];
+  web_take_enabled: boolean;
+  google_linked: boolean;
 };
+
+type Starter = { id: string; text: string };
 
 // Sites injects production environment variables at runtime, while Vite replaces
 // import.meta.env values during the build. Keep the public Supabase client config
@@ -141,6 +145,10 @@ export default function Home() {
   const [webSignedIn, setWebSignedIn] = useState(false);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutNotice, setCheckoutNotice] = useState('');
+  const [starters, setStarters] = useState<Starter[]>([]);
+  const [selectedStarterId, setSelectedStarterId] = useState('');
+  const [takeBusy, setTakeBusy] = useState(false);
+  const [takeNotice, setTakeNotice] = useState('');
 
   useEffect(() => {
     // A referral link (oneis.live/?ref=alex) - remembered so it still counts
@@ -180,6 +188,19 @@ export default function Home() {
       } catch { /* stay signed out */ }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!state?.web_take_enabled || !state?.google_linked || starters.length) return;
+    void (async () => {
+      try {
+        const raw = localStorage.getItem('one_web_session');
+        const session = raw ? JSON.parse(raw) as BrowserSession : null;
+        const list = await rpc<Starter[]>('list_starter_messages', {}, session?.access_token);
+        setStarters(list);
+        if (list.length) setSelectedStarterId(list[0].id);
+      } catch { /* starters stay empty; the take button covers this case */ }
+    })();
+  }, [state?.web_take_enabled, state?.google_linked, starters.length]);
 
   const buyCredits = useCallback(async () => {
     if (!webSignedIn) {
@@ -225,6 +246,43 @@ export default function Home() {
       setStatus(error instanceof Error && error.message === 'backend_not_configured' ? 'unconfigured' : 'offline');
     }
   }, []);
+
+  const takeScreen = useCallback(async () => {
+    if (!state) return;
+    if (!webSignedIn) {
+      if (!SUPABASE_URL) return;
+      const redirect = window.location.origin + window.location.pathname;
+      window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirect)}`;
+      return;
+    }
+    if (!selectedStarterId) return;
+    setTakeBusy(true);
+    setTakeNotice('');
+    try {
+      const raw = localStorage.getItem('one_web_session');
+      const session = raw ? JSON.parse(raw) as BrowserSession : null;
+      if (!session?.access_token) throw new Error('no_session');
+      const claim = await rpc<{ ok: boolean; message_id: string }>(
+        'claim_starter_message',
+        { p_starter_id: selectedStarterId, p_request_id: crypto.randomUUID() },
+        session.access_token,
+      );
+      const result = await rpc<{ ok: boolean; code?: string; message?: string }>(
+        'take_one_web',
+        { p_message_id: claim.message_id, p_expected_sequence: state.reign.sequence, p_request_id: crypto.randomUUID() },
+        session.access_token,
+      );
+      if (!result.ok) setTakeNotice(result.message || 'Someone else reached ONE first.');
+      else {
+        setTakeNotice('YOU TOOK ONE.');
+        await load(session.access_token);
+      }
+    } catch {
+      setTakeNotice('Could not take the screen. Try again.');
+    } finally {
+      setTakeBusy(false);
+    }
+  }, [state, webSignedIn, selectedStarterId, load]);
 
   useEffect(() => {
     let stopped = false;
@@ -296,7 +354,7 @@ export default function Home() {
       <div className="grid-glow" aria-hidden="true" />
       <header className="topbar">
         <Link href="/" className="brand" aria-label="ONE home"><strong>1</strong><span>ONE</span></Link>
-        <nav className="main-nav" aria-label="Main navigation"><a href="#live">THE SCREEN</a><a href="#how">THE RULES</a><a href="#download">DOWNLOAD ↗</a></nav>
+        <nav className="main-nav" aria-label="Main navigation"><a href="#live">THE SCREEN</a><Link href="/experience">EXPERIENCE</Link><a href="#how">THE RULES</a><a href="#download">DOWNLOAD ↗</a></nav>
         <div className={`live-pill ${status}`}><i /><span>{status === 'live' ? 'LIVE WORLD STATE' : status.replace('_', ' ')}</span></div>
         <Button variant="outline" className="share-button" onClick={() => void share()}><Share2 /> {shareNotice || 'Share ONE'}</Button>
       </header>
@@ -345,7 +403,36 @@ export default function Home() {
               <div><strong>{state.reign.owner.handle}</strong><span>{state.reign.owner.city}, {state.reign.owner.country_code} OWNS ONE</span></div>
             </div>
             <blockquote>{state.reign.message.text}</blockquote>
-            <div className="accent-rule"><span /><em>TAKE IT IN THE ANDROID APP</em></div>
+            {state.web_take_enabled ? (
+              <div className="web-take" aria-label="Take the screen from your browser">
+                {!webSignedIn ? (
+                  <button type="button" className="ghost-cta" onClick={() => void takeScreen()}>
+                    SIGN IN WITH GOOGLE TO TAKE IT <ArrowRight />
+                  </button>
+                ) : !state.google_linked ? (
+                  <p className="checkout-notice">Finish linking your Google account to take the screen from here.</p>
+                ) : (
+                  <>
+                    {starters.length > 0 && (
+                      <select
+                        aria-label="Choose a message"
+                        value={selectedStarterId}
+                        onChange={(event) => setSelectedStarterId(event.target.value)}
+                        disabled={takeBusy}
+                      >
+                        {starters.map((starter) => <option key={starter.id} value={starter.id}>{starter.text}</option>)}
+                      </select>
+                    )}
+                    <button type="button" className="ghost-cta" onClick={() => void takeScreen()} disabled={takeBusy || !selectedStarterId}>
+                      {takeBusy ? 'TAKING…' : 'TAKE THE SCREEN'} <Zap size={16} fill="currentColor" />
+                    </button>
+                  </>
+                )}
+                {takeNotice && <p className="checkout-notice">{takeNotice}</p>}
+              </div>
+            ) : (
+              <div className="accent-rule"><span /><em>TAKE IT IN THE ANDROID APP</em></div>
+            )}
             <div className="crowd-strip">
               {reactions.length ? reactions.map((reaction, index) => (
                 <span key={`${reaction.created_at_ms}-${index}`}><b aria-label={reaction.reaction}>{reactionIcon[reaction.reaction] || '✨'}</b> {reaction.handle}</span>

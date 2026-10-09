@@ -314,12 +314,27 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 is ChallengeResult.Failure -> {
                     if (!result.retryable) pendingChallengeRequestId = null
-                    _ui.update {
-                        it.copy(
-                            challengePhase = ChallengePhase.FAILED,
-                            challengeStatus = result.reason,
-                            toast = result.reason,
-                        )
+                    if (result.identityRequired) {
+                        // Not just an error toast: send them straight to the
+                        // real, working Google-link screen with a reason
+                        // specific to why they're there right now.
+                        _ui.update {
+                            it.copy(
+                                challengePhase = ChallengePhase.IDLE,
+                                challengeStatus = "",
+                                overlay = Overlay.IDENTITY,
+                                identityRequiredReason = result.reason,
+                                toast = result.reason,
+                            )
+                        }
+                    } else {
+                        _ui.update {
+                            it.copy(
+                                challengePhase = ChallengePhase.FAILED,
+                                challengeStatus = result.reason,
+                                toast = result.reason,
+                            )
+                        }
                     }
                 }
             }
@@ -343,6 +358,7 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                 challengePhase = ChallengePhase.IDLE,
                 challengeStatus = "",
                 composeError = null,
+                identityRequiredReason = null,
             )
         }
     }
@@ -511,7 +527,7 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 kotlinx.coroutines.withTimeout(30_000) { repository.googleIdentity(token, nonce, restore) }
                 profilePreferences.edit().putBoolean("google_linked_${world.value.currentUserId}", true).apply()
-                _ui.update { it.copy(overlay = Overlay.IDENTITY, identityLinked = true, identityError = null, toast = "Google connected. Your identity is saved.") }
+                _ui.update { it.copy(overlay = Overlay.IDENTITY, identityLinked = true, identityError = null, identityRequiredReason = null, toast = "Google connected. Your identity is saved.") }
             } catch (e: Exception) {
                 _ui.update { it.copy(identityError = e.message ?: "Could not connect Google.") }
             } finally { _ui.update { it.copy(identityBusy = false) } }
@@ -539,7 +555,7 @@ class OneViewModel(application: Application) : AndroidViewModel(application) {
                 repository.completeGoogleOAuth(accessToken, refreshToken)
                 val userId = world.value.currentUserId
                 profilePreferences.edit().putBoolean("google_linked_$userId", true).apply()
-                _ui.update { it.copy(overlay = Overlay.IDENTITY, identityLinked = true, identityError = null, toast = "Google connected. Your handle is protected.") }
+                _ui.update { it.copy(overlay = Overlay.IDENTITY, identityLinked = true, identityError = null, identityRequiredReason = null, toast = "Google connected. Your handle is protected.") }
             } catch (e: Exception) {
                 _ui.update { it.copy(identityError = e.message ?: "Google linking could not be completed.") }
             } finally {

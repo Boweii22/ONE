@@ -201,6 +201,7 @@ data class OneUiState(
     val identityBusy: Boolean = false,
     val identityLinked: Boolean = false,
     val identityError: String? = null,
+    val identityRequiredReason: String? = null,
     val profileBusy: Boolean = false,
     val howToPlayOnLaunch: Boolean = false,
     val offlineVisible: Boolean = false,
@@ -238,7 +239,7 @@ sealed interface ChallengeResult {
     // rather than a definitive server answer - the caller should reuse the same
     // idempotency key on retry instead of minting a new one, so a request that
     // actually landed server-side can't be double-applied by a retry.
-    data class Failure(val reason: String, val retryable: Boolean = false) : ChallengeResult
+    data class Failure(val reason: String, val retryable: Boolean = false, val identityRequired: Boolean = false) : ChallengeResult
 }
 
 sealed interface BypassResult {

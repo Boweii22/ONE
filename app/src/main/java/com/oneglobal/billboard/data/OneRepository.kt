@@ -35,6 +35,8 @@ interface OneRepository {
     suspend fun updateProfile(city: String, countryCode: String)
     suspend fun updatePhoto(jpeg: ByteArray?)
     suspend fun googleIdentity(idToken: String, nonce: String, restore: Boolean)
+    /** Best effort - a failure here never breaks the linking flow that already succeeded. */
+    suspend fun notifyGoogleLinked(email: String) {}
     suspend fun googleOAuthUrl(restore: Boolean): String
     suspend fun completeGoogleOAuth(accessToken: String, refreshToken: String)
     suspend fun isGoogleIdentityLinked(): Boolean

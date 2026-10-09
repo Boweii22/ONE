@@ -170,7 +170,11 @@ class CloudOneRepository(context: Context) : OneRepository {
             // server has spoken. Anything else (timeout, dropped connection)
             // might have actually landed, so the caller should retry with the
             // same request id rather than risk a duplicate with a fresh one.
-            ChallengeResult.Failure(error.userMessage(), retryable = error !is ApiException)
+            ChallengeResult.Failure(
+                error.userMessage(),
+                retryable = error !is ApiException,
+                identityRequired = error.message?.contains("IDENTITY_REQUIRED") == true,
+            )
         }
     }
 
@@ -254,6 +258,10 @@ class CloudOneRepository(context: Context) : OneRepository {
         BypassResult.Failure(error.userMessage(), retryable = error !is ApiException)
     }
 
+    override suspend fun notifyGoogleLinked(email: String) {
+        runCatching { rpc("mark_google_linked", JSONObject().put("p_email", email), authenticated = true) }
+    }
+
     override suspend fun logAdOfferShown() {
         runCatching { rpc("log_ad_offer_shown", JSONObject(), authenticated = true) }
     }
@@ -319,6 +327,7 @@ class CloudOneRepository(context: Context) : OneRepository {
         runCatching {
             rpc("unblock_one", JSONObject().put("p_blocked_id", id), authenticated = true)
             refreshWorld()
+            _events.emit(OneEvent.Error("Account unblocked."))
         }.onFailure { _events.emit(OneEvent.Error(it.userMessage())) }
     }
 
@@ -471,7 +480,7 @@ class CloudOneRepository(context: Context) : OneRepository {
     override suspend fun googleIdentity(idToken: String, nonce: String, restore: Boolean) = withContext(Dispatchers.IO) {
         // The restore path is a separate, explicitly confirmed action, never a linking fallback.
         val current = if (!restore) refreshSession() else null
-        authMutex.withLock {
+        val linkedEmail = authMutex.withLock {
             val connection = open("${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/token?grant_type=id_token", "POST", current?.accessToken)
             val body = JSONObject().put("provider", "google").put("id_token", idToken)
                 .put("nonce", nonce).put("link_identity", !restore)
@@ -487,14 +496,17 @@ class CloudOneRepository(context: Context) : OneRepository {
                 }
                 throw IllegalStateException("$detail Your current handle is unchanged.")
             }
-            val returnedId = payload.getJSONObject("user").getString("id")
+            val returnedUser = payload.getJSONObject("user")
+            val returnedId = returnedUser.getString("id")
             check(restore || returnedId == _world.value.currentUserId) { "Identity mismatch. Existing session retained." }
             persistSession(payload)
+            returnedUser.optString("email")
         }
         cachedHallToday = emptyList()
         cachedHallAllTime = emptyList()
         hallRefreshAt = 0L
         refreshWorld()
+        if (linkedEmail.isNotBlank()) runCatching { notifyGoogleLinked(linkedEmail) }
     }
 
     override suspend fun googleOAuthUrl(restore: Boolean): String = withContext(Dispatchers.IO) {
@@ -550,6 +562,8 @@ class CloudOneRepository(context: Context) : OneRepository {
         cachedHallAllTime = emptyList()
         hallRefreshAt = 0L
         refreshWorld()
+        val email = user.optString("email")
+        if (email.isNotBlank()) runCatching { notifyGoogleLinked(email) }
     }
 
     override suspend fun isGoogleIdentityLinked(): Boolean = withContext(Dispatchers.IO) {
@@ -824,6 +838,7 @@ class CloudOneRepository(context: Context) : OneRepository {
             message?.contains("ACCOUNT_SUSPENDED") == true -> "Taking ONE is temporarily unavailable for this account."
             message?.contains("REPORT_RATE_LIMIT") == true -> "You have sent a lot of reports recently. Please try again later."
             message?.contains("CANNOT_REPORT_YOURSELF") == true -> "You cannot report your own live message."
+            message?.contains("IDENTITY_REQUIRED") == true -> "Taking the screen now requires a linked Google account."
             else -> message ?: "ONE request failed."
         }
         else -> "Cannot reach ONE. Check your connection and backend configuration."

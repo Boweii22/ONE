@@ -1767,10 +1767,14 @@ private fun IdentityOverlay(
     onReclaim: () -> Unit,
 ) {
     var confirmRestore by remember { mutableStateOf(false) }
+    val requiredReason = ui.identityRequiredReason
     Column(Modifier.fillMaxSize().background(Ink).safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp)) {
-        OverlayHeader("KEEP YOUR IDENTITY", "OPTIONAL // KEEP PLAYING", onClose)
+        OverlayHeader("KEEP YOUR IDENTITY", if (requiredReason != null) "REQUIRED // LINK TO TAKE" else "OPTIONAL // KEEP PLAYING", onClose)
         Spacer(Modifier.height(30.dp))
         Text("KEEP $handle", color = Paper, fontFamily = display, fontSize = 40.sp)
+        if (requiredReason != null && !ui.identityLinked) {
+            Text(requiredReason, color = Orange, fontSize = 17.sp, modifier = Modifier.padding(vertical = 16.dp))
+        }
         Text("If you haven't linked Google, this identity relies on this installation. Link it to return on another device without losing your reigns.", color = Muted, fontSize = 16.sp, modifier = Modifier.padding(vertical = 20.dp))
         if (ui.identityLinked) Text("✓ Google connected. Your handle is protected. Use this Google account to return on another device.", color = Acid, fontSize = 17.sp, modifier = Modifier.padding(bottom = 16.dp))
         Button(onClick = { onGoogle(false) }, enabled = !ui.identityBusy && !ui.identityLinked && BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (ui.identityLinked) "Google connected ✓" else if (ui.identityBusy) "Saving your identity…" else "Continue with Google") }

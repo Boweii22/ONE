@@ -30,8 +30,8 @@ android {
         applicationId = "com.tomribowei.one"
         minSdk = 26
         targetSdk = 36
-        versionCode = 49
-        versionName = "1.0.39"
+        versionCode = 50
+        versionName = "1.0.40"
         buildConfigField("String", "ADMOB_REWARDED_UNIT_ID", "\"" + onePublicValue("ADMOB_REWARDED_UNIT_ID") + "\"")
         // Comma-separated AdMob-reported device hashes (see logcat: "Use
         // RequestConfiguration.Builder().setTestDeviceIds(...)"). Only ever
