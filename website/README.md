@@ -48,5 +48,10 @@ new hostname unless that hostname is explicitly allowlisted in Supabase.
 
 ## Migration status
 
-Prepared locally. Account linking, deployment, Git integration, and domain cutover
-must each be confirmed before this copy is described as production.
+The independent Worker is deployed at
+https://one-web.tombribowei01.workers.dev. Cloudflare Builds is connected to
+`Boweii22/ONE`, branch `main`, root directory `website`, using the commands above.
+Changes pushed to `main` trigger a new build and deployment.
+
+The `oneis.live` domain cutover is still pending. The original Sites deployment
+remains available, and Supabase rollout flags have not been changed.
