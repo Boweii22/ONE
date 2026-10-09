@@ -53,5 +53,14 @@ https://one-web.tombribowei01.workers.dev. Cloudflare Builds is connected to
 `Boweii22/ONE`, branch `main`, root directory `website`, using the commands above.
 Changes pushed to `main` trigger a new build and deployment.
 
-The `oneis.live` domain cutover is still pending. The original Sites deployment
-remains available, and Supabase rollout flags have not been changed.
+`oneis.live` and `www.oneis.live` are connected to the production Worker and
+declared in `wrangler.jsonc` so future deployments retain both domains. Namecheap
+has been switched to `maxine.ns.cloudflare.com` and `nick.ns.cloudflare.com`;
+Cloudflare activation and public DNS propagation must complete before all
+visitors reach the new deployment. Email and payment DNS records were retained.
+The original Sites deployment remains available for rollback, and Supabase
+rollout flags have not been changed.
+
+To update the live website, edit files under `website/`, commit, and push to
+`main`. Cloudflare automatically builds and publishes the changes; Sites is not
+required. Collaborators need repository write access to publish updates.
