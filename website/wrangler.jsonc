@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "one-web",
+  "account_id": "e8e3f77336de761ef9cb0f2580892bf7",
+  "main": "vinext/server/fetch-handler",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "vars": {
+    "VITE_SUPABASE_URL": "https://ajkdzohnntrbkeqjskel.supabase.co",
+    "VITE_SUPABASE_ANON_KEY": "sb_publishable_PGTCO8gqoSrbPgjxXbYqdg_F_D6oqO-",
+    "SUPABASE_URL": "https://ajkdzohnntrbkeqjskel.supabase.co",
+    "SUPABASE_ANON_KEY": "sb_publishable_PGTCO8gqoSrbPgjxXbYqdg_F_D6oqO-",
+    "ONE_WEB_CHECKOUT_ENABLED": "false"
+  }
+}

@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#d7ff00">
+  <meta name="description" content="ONE — the internet has one screen. One message. One owner. Anyone can take it.">
+  <title>ONE — The only live message</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/one-app-icon.png">
+  <link rel="apple-touch-icon" href="/one-app-icon.png">
+  <style>
+    :root {
+      --ink: #070708;
+      --panel: #0d0d0f;
+      --raised: #121215;
+      --paper: #f2f0e9;
+      --muted: #95959d;
+      --acid: #d7ff00;
+      --red: #ff4d35;
+      --blue: #4f74ff;
+      --state-accent: var(--acid);
+      --state-accent-rgb: 215, 255, 0;
+      --line: rgba(242,240,233,.15);
+      --line-soft: rgba(242,240,233,.075);
+      --display: "Archivo", Inter, Arial, Helvetica, sans-serif;
+      --sans: "Archivo", Inter, Arial, Helvetica, sans-serif;
+      --mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+      --mx: 50%;
+      --my: 50%;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--ink); color-scheme: dark; }
+    body {
+      margin: 0;
+      min-width: 280px;
+      overflow-x: hidden;
+      color: var(--paper);
+      background:
+        radial-gradient(circle at var(--mx) var(--my), rgba(var(--state-accent-rgb),.055), transparent 24rem),
+        var(--ink);
+      font-family: var(--sans);
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    button { font: inherit; }
+    a { color: inherit; }
+    img { display: block; max-width: 100%; }
+    ::selection { color: var(--ink); background: var(--acid); }
+
+    .skip-link {
+      position: fixed; z-index: 100; left: 1rem; top: 1rem; transform: translateY(-180%);
+      padding: .8rem 1rem; background: var(--acid); color: var(--ink); font: 900 .75rem var(--mono);
+    }
+    .skip-link:focus { transform: none; }
+
+    .grain, .scanlines {
+      position: fixed; inset: 0; pointer-events: none; z-index: 90;
+    }
+    .grain {
+      opacity: .16;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.25'/%3E%3C/svg%3E");
+      mix-blend-mode: soft-light;
+    }
+    .scanlines {
+      opacity: .04;
+      background: repeating-linear-gradient(to bottom, transparent 0 3px, #fff 4px);
+    }
+
+    .topbar {
+      height: 82px; display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+      gap: clamp(1.25rem, 3vw, 4rem); padding: 0 clamp(1rem, 3.8vw, 4.5rem);
+      border-bottom: 1px solid var(--line); position: relative; z-index: 20;
+      background: rgba(7,7,8,.82); backdrop-filter: blur(18px);
+    }
+    .brand { display: inline-flex; align-items: center; gap: .75rem; text-decoration: none; }
+    .brand-mark {
+      width: 46px; aspect-ratio: 1; display: block; position: relative;
+      border-radius: 13px; overflow: hidden; object-fit: cover; background: var(--ink);
+      box-shadow: 0 0 0 1px rgba(242,240,233,.12), 0 0 34px rgba(var(--state-accent-rgb),.22);
+      transition: box-shadow .45s ease, transform .45s cubic-bezier(.2,.8,.2,1);
+    }
+    .brand:hover .brand-mark, .brand:focus-visible .brand-mark { transform: rotate(-4deg) scale(1.06); box-shadow: 0 0 0 1px var(--state-accent), 0 0 44px rgba(var(--state-accent-rgb),.34); }
+    .brand-word { font: 900 1.2rem/1 var(--sans); letter-spacing: -.04em; }
+    .nav { display: flex; justify-content: center; gap: clamp(1.2rem, 3vw, 3.4rem); }
+    .nav a, .top-note {
+      text-decoration: none; color: #d0cfc9; font: 800 .72rem/1 var(--mono); letter-spacing: .08em;
+      transition: color .25s ease;
+    }
+    .nav a { position: relative; padding: .8rem 0; }
+    .nav a::after { content: ""; position: absolute; left: 0; right: 100%; bottom: .4rem; height: 2px; background: var(--acid); transition: right .3s ease; }
+    .nav a:hover, .nav a:focus-visible { color: var(--acid); }
+    .nav a:hover::after, .nav a:focus-visible::after { right: 0; }
+    .top-actions { display: flex; align-items: center; gap: 1.4rem; }
+    .top-note { color: var(--muted); white-space: nowrap; }
+    .button {
+      min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: .8rem;
+      padding: 0 1.35rem; border: 1px solid var(--paper); color: var(--paper); background: transparent;
+      text-decoration: none; cursor: pointer; font: 900 .76rem/1 var(--mono); letter-spacing: .02em;
+      position: relative; overflow: hidden; isolation: isolate; transition: color .25s ease, border-color .25s ease, transform .25s ease;
+    }
+    .button::before { content: ""; position: absolute; inset: 0; background: var(--paper); transform: translateX(-105%); transition: transform .35s cubic-bezier(.2,.8,.2,1); z-index: -1; }
+    .button:hover::before, .button:focus-visible::before { transform: none; }
+    .button:hover, .button:focus-visible { color: var(--ink); transform: translateY(-2px); }
+    .button.acid { color: var(--ink); border-color: var(--acid); background: var(--acid); }
+    .button.acid::before { background: var(--paper); }
+    .button .arrow { font-size: 1.1rem; transition: transform .25s ease; }
+    .button:hover .arrow { transform: translateX(4px); }
+
+    .hero { min-height: calc(100svh - 82px); display: flex; flex-direction: column; position: relative; }
+    .hero-grid {
+      flex: 1; display: grid; grid-template-columns: minmax(290px, .72fr) minmax(480px, 1.28fr) minmax(184px, .29fr);
+      border-bottom: 1px solid var(--line); min-height: 690px;
+    }
+
+    .hero-copy {
+      position: relative; display: flex; flex-direction: column; justify-content: center;
+      padding: clamp(2.2rem, 5vw, 5.5rem) clamp(1rem, 3.8vw, 4.5rem); overflow: hidden;
+      border-right: 1px solid var(--line);
+    }
+    .radar { position: absolute; width: min(40vw, 620px); aspect-ratio: 1; left: -32%; top: 4%; border: 1px solid rgba(215,255,0,.23); border-radius: 50%; pointer-events: none; }
+    .radar::before, .radar::after { content: ""; position: absolute; inset: 16%; border: inherit; border-radius: inherit; }
+    .radar::after { inset: 34%; }
+    .radar i { position: absolute; inset: 0; border-radius: inherit; background: conic-gradient(from 120deg, transparent 0 72%, rgba(215,255,0,.12), transparent 84%); animation: sweep 9s linear infinite; }
+    @keyframes sweep { to { transform: rotate(1turn); } }
+    .eyebrow { display: flex; align-items: center; gap: .65rem; margin: 0 0 1.2rem; color: var(--acid); font: 900 .68rem/1 var(--mono); letter-spacing: .14em; }
+    .eyebrow::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 20px currentColor; animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .28; transform: scale(.7); } }
+    .headline {
+      position: relative; z-index: 1; margin: 0; max-width: 700px; font: 900 clamp(4.3rem, 7.15vw, 8.45rem)/.78 var(--display);
+      letter-spacing: -.055em; text-transform: uppercase; text-wrap: balance;
+    }
+    .headline span { color: var(--acid); }
+    .subline { max-width: 34rem; margin: 1.4rem 0 0; color: #c5c3bd; font: 700 clamp(.82rem, .9vw, 1rem)/1.55 var(--mono); text-transform: uppercase; letter-spacing: .035em; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.8rem; }
+    .hero-actions .button { min-width: 176px; }
+    .coming { margin: .65rem 0 0 15.1rem; color: #77777f; font: 800 .58rem/1 var(--mono); letter-spacing: .12em; }
+
+    .stage-wrap { position: relative; padding: clamp(1rem, 2vw, 2rem); display: flex; align-items: center; overflow: hidden; }
+    .stage-wrap::after { content: ""; position: absolute; inset: auto -18% -25% auto; width: 55%; aspect-ratio: 1; background: var(--acid); transform: rotate(-28deg) skewX(-20deg); filter: blur(.2px); clip-path: polygon(0 48%,100% 0,88% 20%,5% 64%,72% 100%,0 72%); opacity: .88; }
+    .live-stage {
+      width: 100%; min-height: min(76svh, 670px); position: relative; z-index: 2; overflow: hidden;
+      display: flex; flex-direction: column; padding: clamp(1.1rem, 2.2vw, 2rem);
+      border: 1px solid rgba(242,240,233,.32); background: linear-gradient(145deg, rgba(16,16,18,.97), rgba(7,7,8,.98));
+      box-shadow: 0 34px 100px rgba(0,0,0,.5), inset 0 0 100px rgba(215,255,0,.025);
+    }
+    .live-stage::before {
+      content: ""; position: absolute; inset: 0; opacity: .14;
+      background: url("world-map.png") center / 84% auto no-repeat;
+      filter: grayscale(1) contrast(1.4);
+    }
+    .live-stage::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(105deg, transparent 22%, rgba(255,255,255,.035) 46%, transparent 68%);
+      transform: translateX(-100%); animation: stage-shine 8s ease-in-out infinite;
+    }
+    @keyframes stage-shine { 0%,70% { transform: translateX(-100%); } 90%,100% { transform: translateX(100%); } }
+    .corner { position: absolute; width: 18px; height: 18px; border-color: rgba(242,240,233,.55); z-index: 4; }
+    .corner.tl { left: 10px; top: 10px; border-left: 2px solid; border-top: 2px solid; }
+    .corner.tr { right: 10px; top: 10px; border-right: 2px solid; border-top: 2px solid; }
+    .corner.bl { left: 10px; bottom: 10px; border-left: 2px solid; border-bottom: 2px solid; }
+    .corner.br { right: 10px; bottom: 10px; border-right: 2px solid; border-bottom: 2px solid; }
+    .stage-top, .stage-bottom { position: relative; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .stage-top { font: 700 .62rem/1 var(--mono); color: var(--muted); letter-spacing: .09em; }
+    .live-label { display: inline-flex; align-items: center; gap: .7rem; color: var(--acid); font-size: .88rem; font-weight: 900; }
+    .live-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--acid); box-shadow: 0 0 18px rgba(215,255,0,.8); }
+    .utc { white-space: nowrap; }
+    .broadcast-body { position: relative; z-index: 3; flex: 1; display: grid; place-content: center; justify-items: center; text-align: center; padding: 3rem 1rem 2rem; }
+    .owner { display: flex; align-items: center; gap: .9rem; margin-bottom: 1.8rem; text-align: left; }
+    .avatar { width: 62px; aspect-ratio: 1; display: grid; place-items: center; border: 2px solid var(--acid); border-radius: 50%; color: var(--acid); font: 900 1rem var(--mono); background: rgba(215,255,0,.04); }
+    .owner strong { display: block; font: 900 clamp(1rem, 1.4vw, 1.35rem)/1 var(--sans); }
+    .owner small { display: block; margin-top: .45rem; color: var(--muted); font: 700 .62rem/1 var(--mono); letter-spacing: .12em; }
+    .message {
+      max-width: 850px; margin: 0; font: 900 clamp(3.2rem, 5.5vw, 6.6rem)/.86 var(--display);
+      letter-spacing: -.035em; text-transform: uppercase; text-wrap: balance;
+      filter: drop-shadow(0 6px 20px rgba(0,0,0,.4));
+    }
+    .only-live { display: flex; align-items: center; gap: .85rem; margin-top: 1.8rem; color: var(--acid); font: 900 .64rem var(--mono); letter-spacing: .14em; }
+    .only-live::before { content: ""; width: 48px; height: 4px; background: var(--acid); }
+    .reign-card { display: grid; grid-template-columns: 1.25fr 1fr; min-width: min(420px, 90%); margin-top: 2.25rem; border: 1px solid var(--line); background: rgba(7,7,8,.5); backdrop-filter: blur(10px); }
+    .reign-card div { padding: .85rem 1.15rem; text-align: left; }
+    .reign-card div + div { border-left: 1px solid var(--line); }
+    .reign-card small { display: block; color: var(--muted); font: 700 .59rem/1 var(--mono); letter-spacing: .12em; }
+    .reign-card strong { display: block; margin-top: .4rem; font: 900 clamp(1.65rem, 2.3vw, 2.6rem)/1 var(--display); letter-spacing: .02em; }
+    .stage-bottom { color: var(--muted); font: 700 .58rem/1 var(--mono); letter-spacing: .11em; }
+    .broadcasting { display: flex; align-items: center; gap: .55rem; }
+    .broadcasting::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--acid); }
+    .stage-flash { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; background: var(--acid); color: var(--ink); opacity: 0; pointer-events: none; font: 900 clamp(4rem, 12vw, 10rem)/1 var(--display); }
+    .live-stage.switching .stage-flash { animation: takeover .85s cubic-bezier(.2,.8,.2,1); }
+    @keyframes takeover { 0% { opacity: 0; transform: scaleY(.1); } 20%,65% { opacity: 1; transform: scaleY(1); } 100% { opacity: 0; transform: scaleY(1); } }
+
+    .telemetry { position: relative; z-index: 3; display: grid; grid-template-rows: repeat(3, 1fr); border-left: 1px solid var(--line); }
+    .stat { display: flex; flex-direction: column; justify-content: center; padding: clamp(1rem, 2vw, 2rem); border-bottom: 1px solid var(--line); min-width: 0; }
+    .stat:last-child { border-bottom: 0; }
+    .stat small { max-width: 12ch; color: #b0afb1; font: 700 .66rem/1.35 var(--mono); letter-spacing: .1em; }
+    .stat strong { margin-top: 1rem; font: 900 clamp(2.2rem, 3.8vw, 4.7rem)/.8 var(--display); letter-spacing: .01em; overflow-wrap: anywhere; }
+    .stat:first-child strong { color: var(--acid); }
+    .micro-bars { height: 37px; display: flex; align-items: end; gap: 7px; margin-top: 1rem; }
+    .micro-bars i { display: block; width: 1px; background: var(--paper); opacity: .7; animation: bars 1.3s ease-in-out infinite alternate; }
+    .micro-bars i:nth-child(1) { height: 10%; animation-delay: -.3s; } .micro-bars i:nth-child(2) { height: 35%; animation-delay: -.7s; }
+    .micro-bars i:nth-child(3) { height: 60%; animation-delay: -.1s; } .micro-bars i:nth-child(4) { height: 84%; animation-delay: -.8s; }
+    .micro-bars i:nth-child(5) { height: 100%; animation-delay: -.5s; }
+    @keyframes bars { to { transform: scaleY(.45); opacity: .28; } }
+
+    .ticker { height: 86px; overflow: hidden; border-bottom: 1px solid var(--line); background: #09090a; }
+    .ticker-track { height: 100%; width: max-content; display: flex; align-items: stretch; animation: ticker 34s linear infinite; }
+    .ticker:hover .ticker-track, .ticker:focus-within .ticker-track { animation-play-state: paused; }
+    @keyframes ticker { to { transform: translateX(-50%); } }
+    .ticker-label, .ticker-item, .ticker-manifesto { display: flex; flex-direction: column; justify-content: center; flex: 0 0 auto; border-right: 1px solid var(--line); padding: 0 2rem; }
+    .ticker-label { width: 170px; color: var(--muted); font: 800 .62rem/1.4 var(--mono); letter-spacing: .1em; }
+    .ticker-item { width: 300px; border-top: 0; border-bottom: 0; border-left: 0; color: var(--paper); background: transparent; text-align: left; cursor: pointer; transition: background .2s ease; }
+    .ticker-item:hover, .ticker-item:focus-visible { background: rgba(215,255,0,.08); outline: none; }
+    .ticker-item strong { font: 900 .8rem/1 var(--mono); }
+    .ticker-item strong i { display: inline-block; width: 7px; height: 7px; margin-left: .5rem; border-radius: 50%; background: var(--red); }
+    .ticker-item:nth-child(3n) strong i { background: var(--blue); }
+    .ticker-item small { margin-top: .65rem; color: var(--muted); font: 700 .57rem/1 var(--mono); }
+    .ticker-manifesto { width: 210px; color: var(--acid); font: 900 .72rem/1.25 var(--mono); }
+
+    .section { position: relative; padding: clamp(5.5rem, 9vw, 10rem) clamp(1rem, 5vw, 6rem); border-bottom: 1px solid var(--line); }
+    .section-head { display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; align-items: end; max-width: 1600px; margin: 0 auto 4rem; }
+    .section-index { color: var(--acid); font: 900 .72rem var(--mono); letter-spacing: .13em; }
+    .section h2 { margin: 0; font: 900 clamp(3.9rem, 8vw, 9.4rem)/.8 var(--display); letter-spacing: -.04em; text-transform: uppercase; }
+
+    .mechanics { max-width: 1600px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); }
+    .mechanic { min-height: 360px; position: relative; padding: clamp(1.5rem, 3vw, 3rem); overflow: hidden; border-right: 1px solid var(--line); background: var(--panel); transition: background .35s ease, color .35s ease; }
+    .mechanic:last-child { border-right: 0; }
+    .mechanic:hover { color: var(--ink); background: var(--acid); }
+    .mechanic .num { color: var(--acid); font: 900 .72rem var(--mono); }
+    .mechanic:hover .num, .mechanic:hover p { color: rgba(7,7,8,.72); }
+    .mechanic h3 { max-width: 9ch; margin: 4rem 0 1.25rem; font: 900 clamp(2.7rem, 4.2vw, 5rem)/.82 var(--display); text-transform: uppercase; letter-spacing: -.025em; }
+    .mechanic p { max-width: 34ch; color: var(--muted); font: 600 .9rem/1.55 var(--mono); transition: color .35s ease; }
+    .mechanic .ghost-num { position: absolute; right: -1rem; bottom: -4.4rem; color: rgba(242,240,233,.035); font: 900 17rem/1 var(--display); transition: transform .5s ease, color .35s ease; }
+    .mechanic:hover .ghost-num { color: rgba(7,7,8,.1); transform: translateY(-.8rem) rotate(-4deg); }
+
+    .hall { background: var(--paper); color: var(--ink); overflow: hidden; }
+    .hall .section-index { color: #657a00; }
+    .hall-grid { max-width: 1600px; margin: 0 auto; display: grid; grid-template-columns: 1.25fr .75fr; gap: clamp(1rem, 4vw, 5rem); }
+    .reign-list { border-top: 2px solid var(--ink); }
+    .reign-row { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 1.2rem; padding: 1.35rem 0; border-bottom: 1px solid rgba(7,7,8,.25); }
+    .rank { font: 900 1rem var(--mono); }
+    .reign-row strong { font: 900 clamp(1.4rem, 2.4vw, 2.8rem)/1 var(--display); }
+    .reign-row span { display: block; margin-top: .3rem; color: #55555b; font: 700 .62rem var(--mono); }
+    .reign-row time { font: 900 clamp(1.3rem, 2vw, 2.4rem)/1 var(--mono); }
+    .hall-poster { min-height: 480px; display: flex; flex-direction: column; justify-content: space-between; padding: 2rem; background: var(--acid); color: var(--ink); }
+    .hall-poster small { font: 900 .68rem var(--mono); letter-spacing: .12em; }
+    .hall-poster strong { font: 900 clamp(4rem, 8vw, 9rem)/.75 var(--display); letter-spacing: -.05em; }
+    .hall-poster p { margin: 0; max-width: 30ch; font: 800 .8rem/1.4 var(--mono); }
+
+    .download { min-height: 78svh; display: grid; place-items: center; text-align: center; overflow: hidden; }
+    .download::before { content: "1"; position: absolute; inset: 50% auto auto 50%; transform: translate(-50%,-50%); color: rgba(215,255,0,.045); font: 900 78vw/1 var(--display); }
+    .download-inner { position: relative; z-index: 1; max-width: 1100px; }
+    .download h2 { font-size: clamp(4.5rem, 12vw, 13rem); }
+    .download p { max-width: 44rem; margin: 1.8rem auto 2.4rem; color: #b4b3b8; font: 600 clamp(1rem, 1.4vw, 1.25rem)/1.6 var(--mono); }
+    .download-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .8rem; }
+    .download-actions .button { min-width: 220px; }
+
+    footer { display: flex; justify-content: space-between; gap: 1rem; padding: 1.4rem clamp(1rem, 3.8vw, 4.5rem); color: var(--muted); font: 700 .62rem var(--mono); letter-spacing: .09em; }
+    footer nav { display: flex; flex-wrap: wrap; gap: 1.4rem; }
+    footer a { text-decoration: none; }
+    footer a:hover { color: var(--acid); }
+
+    .reveal { opacity: 0; transform: translateY(38px); transition: opacity .75s ease, transform .75s cubic-bezier(.2,.8,.2,1); }
+    .reveal.in { opacity: 1; transform: none; }
+
+    @media (max-width: 1180px) {
+      .top-note { display: none; }
+      .hero-grid { grid-template-columns: .78fr 1.22fr; }
+      .telemetry { grid-column: 1 / -1; grid-template-columns: repeat(3, 1fr); grid-template-rows: auto; border-left: 0; border-top: 1px solid var(--line); }
+      .stat { min-height: 150px; border-right: 1px solid var(--line); border-bottom: 0; }
+      .stat:last-child { border-right: 0; }
+      .hero-copy { min-height: 690px; }
+      .stage-wrap { min-height: 690px; }
+    }
+
+    @media (max-width: 820px) {
+      .topbar { height: 68px; grid-template-columns: auto auto; justify-content: space-between; }
+      .nav { display: none; }
+      .top-actions .button { min-height: 42px; padding: 0 .9rem; font-size: .65rem; }
+      .brand-mark { width: 39px; } .brand-word { font-size: 1rem; }
+      .hero { min-height: auto; }
+      .hero-grid { display: flex; flex-direction: column; min-height: 0; }
+      .hero-copy { min-height: min(700px, calc(100svh - 68px)); border-right: 0; border-bottom: 1px solid var(--line); justify-content: flex-end; padding-top: 6rem; padding-bottom: 3rem; }
+      .headline { font-size: clamp(4.35rem, 19vw, 8rem); }
+      .subline { max-width: 32rem; }
+      .coming { margin-left: 0; }
+      .stage-wrap { min-height: 720px; padding: .75rem; }
+      .live-stage { min-height: 690px; }
+      .message { font-size: clamp(3.2rem, 12vw, 5.5rem); }
+      .telemetry { grid-template-columns: 1fr 1fr; }
+      .stat:last-child { grid-column: 1 / -1; border-top: 1px solid var(--line); }
+      .section-head { grid-template-columns: 1fr; }
+      .mechanics { grid-template-columns: 1fr; }
+      .mechanic { min-height: 320px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .mechanic:last-child { border-bottom: 0; }
+      .hall-grid { grid-template-columns: 1fr; }
+      .hall-poster { min-height: 360px; }
+    }
+
+    @media (max-width: 520px) {
+      .topbar { padding-inline: .8rem; }
+      .top-actions .button { min-width: 44px; width: 44px; padding: 0; font-size: 0; }
+      .top-actions .button .arrow { font-size: 1rem; }
+      .hero-copy { min-height: calc(100svh - 68px); padding: 4rem 1rem 2rem; }
+      .headline { font-size: clamp(4.1rem, 21.5vw, 6.8rem); line-height: .79; }
+      .subline { font-size: .72rem; }
+      .hero-actions { display: grid; grid-template-columns: 1fr 1fr; }
+      .hero-actions .button { min-width: 0; padding-inline: .75rem; font-size: .63rem; }
+      .stage-wrap { min-height: auto; padding: .55rem; }
+      .live-stage { min-height: 670px; padding: 1rem; }
+      .utc { display: none; }
+      .broadcast-body { padding-inline: 0; }
+      .owner { align-self: flex-start; margin-left: .25rem; }
+      .avatar { width: 50px; }
+      .message { font-size: clamp(3.05rem, 14.6vw, 4.6rem); line-height: .86; }
+      .reign-card { min-width: 100%; }
+      .reign-card div { padding: .8rem; }
+      .reign-card strong { font-size: 1.75rem; }
+      .stage-bottom { align-items: flex-end; }
+      .stage-bottom > span:first-child { max-width: 12ch; }
+      .telemetry { grid-template-columns: 1fr; }
+      .stat, .stat:last-child { min-height: 150px; grid-column: auto; border-right: 0; border-top: 0; border-bottom: 1px solid var(--line); }
+      .ticker { height: 76px; }
+      .section { padding-inline: 1rem; }
+      .section h2 { font-size: clamp(3.8rem, 19vw, 6.5rem); }
+      .mechanic { min-height: 285px; padding: 1.4rem; }
+      .mechanic h3 { margin-top: 3rem; font-size: 3.1rem; }
+      .reign-row { grid-template-columns: 34px minmax(0,1fr); }
+      .reign-row time { grid-column: 2; }
+      .hall-poster { min-height: 320px; }
+      .download { min-height: 75svh; }
+      .download-actions { display: grid; grid-template-columns: 1fr; }
+      footer { flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+      .reveal { opacity: 1; transform: none; }
+    }
+    /* Cinematic scroll runway: the hero pulls back into an endless global wall. */
+    .hero { height: 390svh; min-height: 0; display: block; }
+    .hero-scroll-stage { position: sticky; top: 0; height: 100svh; min-height: 580px; overflow: hidden; background: var(--ink); }
+    .screen-wall { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
+    .hero-grid { position: absolute; inset: 0; z-index: 3; min-height: 0; height: 100%; will-change: opacity, transform, filter; }
+    .scroll-vignette { position: absolute; inset: 0; z-index: 4; pointer-events: none; background: radial-gradient(ellipse 75% 62% at 50% 50%, transparent 28%, rgba(0,0,0,.76) 100%); opacity: 0; }
+    .scroll-chapters { position: absolute; inset: 0; z-index: 5; pointer-events: none; display: grid; place-items: center; padding: clamp(1.5rem, 7vw, 8rem); }
+    .scroll-chapter { position: absolute; width: min(920px, 88vw); text-align: center; opacity: 0; transform: translateY(24px) scale(.975); transition: opacity .42s ease, transform .52s cubic-bezier(.2,.8,.2,1); }
+    .scroll-chapter.on { opacity: 1; transform: none; }
+    .scroll-chapter h2 { margin: 0; font: 900 clamp(2.5rem, 5.3vw, 6rem)/.94 var(--display); letter-spacing: -.045em; text-transform: uppercase; text-wrap: balance; text-shadow: 0 10px 60px #000; }
+    .scroll-chapter h2 em { color: var(--acid); font-style: normal; }
+    .scroll-chapter p { margin: 1.2rem 0 0; color: #aaa9ae; font: 700 clamp(.66rem, .9vw, .82rem)/1.6 var(--mono); letter-spacing: .13em; }
+    .scroll-progress { position: absolute; z-index: 6; right: clamp(.8rem, 2vw, 2rem); top: 50%; width: 2px; height: min(240px, 34vh); transform: translateY(-50%); background: rgba(242,240,233,.12); }
+    .scroll-progress i { display: block; width: 100%; height: var(--progress, 0%); background: var(--acid); box-shadow: 0 0 18px rgba(215,255,0,.5); }
+    .scroll-progress span { position: absolute; right: .8rem; top: 0; color: var(--muted); white-space: nowrap; font: 700 .57rem var(--mono); letter-spacing: .12em; writing-mode: vertical-rl; transform: rotate(180deg); }
+    .scroll-hint { position: absolute; z-index: 6; left: 50%; bottom: 1.3rem; transform: translateX(-50%); color: var(--muted); font: 700 .6rem var(--mono); letter-spacing: .24em; transition: opacity .35s ease; animation: drift 2.8s ease-in-out infinite; }
+    @keyframes drift { 50% { transform: translate(-50%, 7px); } }
+    .hero > .ticker { position: absolute; z-index: 7; left: 0; right: 0; bottom: 0; }
+
+    /* More controlled type scale and breathing room. */
+    .headline { max-width: 620px; font-size: clamp(3.25rem, 5.35vw, 6.35rem); line-height: .84; letter-spacing: -.045em; }
+    .hero-copy { padding: clamp(2rem, 4vw, 4.25rem) clamp(1rem, 3.2vw, 3.75rem); }
+    .message { max-width: 760px; font-size: clamp(2.25rem, 3.8vw, 4.55rem); line-height: .92; letter-spacing: -.025em; }
+    .broadcast-body { padding: 2.2rem 1rem 1.5rem; }
+    .owner { margin-bottom: 1.25rem; }
+    .reign-card { margin-top: 1.6rem; }
+    .stat strong { font-size: clamp(2rem, 3vw, 3.6rem); line-height: .9; }
+    .section h2 { font-size: clamp(3.2rem, 5.8vw, 6.9rem); line-height: .86; }
+    .mechanic h3 { font-size: clamp(2.25rem, 3.25vw, 3.85rem); line-height: .9; }
+    .hall-poster strong { font-size: clamp(3.5rem, 6vw, 7.1rem); line-height: .8; }
+    .download h2 { font-size: clamp(4rem, 8.2vw, 9.5rem); line-height: .84; }
+
+    @media (max-width: 1180px) {
+      .hero-copy, .stage-wrap { min-height: 0; }
+    }
+    @media (max-width: 820px) {
+      .hero { height: 360svh; }
+      .hero-scroll-stage { min-height: 620px; }
+      .hero-grid { display: grid; grid-template-columns: 1fr; grid-template-rows: minmax(280px, .86fr) minmax(330px, 1.14fr); }
+      .hero-copy { min-height: 0; justify-content: flex-end; padding: 4.4rem 1.25rem 1.15rem; border-right: 0; border-bottom: 1px solid var(--line); }
+      .headline { font-size: clamp(3.4rem, 11vw, 5.4rem); line-height: .84; }
+      .subline { max-width: 36rem; margin-top: .85rem; font-size: .72rem; }
+      .hero-actions { margin-top: 1rem; }
+      .coming { display: none; }
+      .stage-wrap { min-height: 0; padding: .65rem; }
+      .live-stage { min-height: 0; height: 100%; }
+      .telemetry { display: none; }
+      .message { font-size: clamp(2.2rem, 7.4vw, 3.6rem); }
+      .broadcast-body { padding: 1.1rem .5rem .8rem; }
+      .owner { align-self: flex-start; margin: 0 0 .8rem; }
+      .reign-card { margin-top: 1rem; }
+      .scroll-chapter h2 { font-size: clamp(2.4rem, 9vw, 4.6rem); }
+    }
+    @media (max-width: 520px) {
+      .hero-scroll-stage { min-height: 600px; }
+      .hero-grid { grid-template-rows: minmax(285px, .92fr) minmax(315px, 1.08fr); }
+      .hero-copy { min-height: 0; padding: 4rem 1rem .9rem; }
+      .headline { font-size: clamp(3rem, 13.7vw, 4.35rem); line-height: .85; }
+      .subline { display: none; }
+      .hero-actions .button { min-height: 42px; }
+      .stage-wrap { min-height: 0; }
+      .live-stage { min-height: 0; padding: .85rem; }
+      .live-label { font-size: .72rem; }
+      .owner { gap: .65rem; }
+      .avatar { width: 42px; }
+      .message { font-size: clamp(1.9rem, 9.4vw, 2.75rem); line-height: .94; }
+      .only-live { margin-top: .8rem; font-size: .53rem; }
+      .reign-card { min-width: 100%; }
+      .reign-card strong { font-size: 1.45rem; }
+      .stage-bottom { font-size: .49rem; }
+      .scroll-progress { right: .55rem; }
+      .scroll-progress span { display: none; }
+      .scroll-chapter { width: 86vw; }
+      .scroll-chapter h2 { font-size: clamp(2.25rem, 11vw, 3.5rem); }
+      .scroll-chapter p { font-size: .58rem; }
+      .section h2 { font-size: clamp(3rem, 14vw, 4.8rem); }
+      .download h2 { font-size: clamp(3.5rem, 16vw, 5.4rem); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .hero { height: auto; }
+      .hero-scroll-stage { position: relative; height: auto; min-height: 760px; }
+      .hero-grid { position: relative; min-height: 760px; }
+      .screen-wall, .scroll-chapters, .scroll-progress, .scroll-hint { display: none; }
+      .hero > .ticker { position: relative; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#live">Skip to the live screen</a>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="scanlines" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="ONE home"><img class="brand-mark" src="/one-app-icon.png" alt=""><span class="brand-word">ONE</span></a>
+    <nav class="nav" aria-label="Main navigation">
+      <a href="#live">LIVE SCREEN</a><a href="#how">HOW IT WORKS</a><a href="#hall">HALL OF FAME</a>
+    </nav>
+    <div class="top-actions"><span class="top-note">THE ONLY LIVE MESSAGE</span><a class="button acid" href="downloads/ONE-Android-preview.apk" download><span>DOWNLOAD APK</span><span class="arrow">↓</span></a></div>
+  </header>
+
+  <main id="top">
+    <section class="hero" id="live">
+      <div class="hero-scroll-stage">
+        <canvas class="screen-wall" id="screen-wall" aria-hidden="true"></canvas>
+        <div class="hero-grid" id="hero-grid">
+        <div class="hero-copy">
+          <div class="radar" aria-hidden="true"><i></i></div>
+          <div class="eyebrow">LIVE / WORLD STATE</div>
+          <h1 class="headline">THE<br>INTERNET<br>HAS <span>ONE</span><br>SCREEN.</h1>
+          <p class="subline">One message. One owner. A global audience. Anyone can take it. Anyone can lose it.</p>
+          <div class="hero-actions">
+            <a class="button acid" href="#broadcast"><span>WATCH IT LIVE</span><span class="arrow">→</span></a>
+            <a class="button" href="downloads/ONE-Android-preview.apk" download><span>DOWNLOAD APK</span><span class="arrow">↓</span></a>
+          </div>
+          <p class="coming">GOOGLE PLAY / COMING SOON</p>
+        </div>
+
+        <div class="stage-wrap" id="broadcast">
+          <article class="live-stage" aria-live="polite">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <div class="stage-flash">TAKEN.</div>
+            <div class="stage-top">
+              <span class="live-label"><i class="live-dot"></i>LIVE <span style="color:#77777f;font-weight:500">/ GLOBAL SCREEN</span></span>
+              <span class="utc" id="utc">UTC 00:00:00</span>
+            </div>
+            <div class="broadcast-body">
+              <div class="owner"><span class="avatar" id="avatar">BW</span><div><strong id="owner">@BOWEII</strong><small id="location">OWNS ONE // LONDON, UK</small></div></div>
+              <blockquote class="message" id="message">THE WHOLE WORLD WILL SEE THIS.</blockquote>
+              <div class="only-live">THE ONLY LIVE MESSAGE</div>
+              <div class="reign-card">
+                <div><small>YOUR REIGN</small><strong id="reign">08:47:32</strong></div>
+                <div><small>VERIFIED VIEWS</small><strong id="views">551</strong></div>
+              </div>
+            </div>
+            <div class="stage-bottom"><span>ONEIS.LIVE</span><span class="broadcasting">BROADCASTING TO EVERYONE</span></div>
+          </article>
+        </div>
+
+        <aside class="telemetry" aria-label="Live statistics">
+          <div class="stat"><small>PEOPLE ARE WATCHING RIGHT NOW</small><strong id="watchers">2,431</strong><span style="margin-top:.8rem;font:700 .62rem var(--mono)">WATCHING</span></div>
+          <div class="stat"><small>TAKEOVERS TODAY</small><strong id="takeovers">16</strong><span class="micro-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></div>
+          <div class="stat"><small>CURRENT REIGN</small><strong id="side-reign">08:47:32</strong></div>
+        </aside>
+        </div>
+        <div class="scroll-vignette" id="scroll-vignette" aria-hidden="true"></div>
+        <div class="scroll-chapters" aria-hidden="true">
+          <div class="scroll-chapter" data-from=".18" data-to=".37"><h2>This is the<br><em>only screen.</em></h2><p>KEEP SCROLLING / SEE HOW FAR IT GOES</p></div>
+          <div class="scroll-chapter" data-from=".40" data-to=".61"><h2>Every screen.<br><em>The same message.</em></h2><p>SAME WORDS / SAME SECOND / EVERYWHERE</p></div>
+          <div class="scroll-chapter" data-from=".64" data-to=".83"><h2>Then somebody<br><em>takes it.</em></h2><p>ONE MOVE / THE WHOLE WORLD CHANGES</p></div>
+          <div class="scroll-chapter" data-from=".86" data-to="1.01"><h2>Somebody owns it<br>right now. <em>Not you.</em></h2><p>ONE SCREEN / ONE OWNER / TAKE IT BACK</p></div>
+        </div>
+        <div class="scroll-progress" aria-hidden="true"><i></i><span>ONE / GLOBAL BROADCAST</span></div>
+        <div class="scroll-hint" id="scroll-hint" aria-hidden="true">SCROLL TO PULL BACK</div>
+      </div>
+
+      <div class="ticker" aria-label="Recent takeovers. Choose one to preview it on the live screen.">
+        <div class="ticker-track" id="ticker">
+          <div class="ticker-label">RECENT<br>TAKEOVERS</div>
+          <button class="ticker-item" data-owner="@NOVA" data-avatar="NO" data-message="YOU HAD THE SCREEN. I TOOK IT." data-views="804"><strong>@NOVA <i></i></strong><small>YOU HAD THE SCREEN. I TOOK IT.</small></button>
+          <button class="ticker-item" data-owner="@KAI" data-avatar="KA" data-message="SMALL PEOPLE. BIG INTERNET." data-views="921"><strong>@KAI <i></i></strong><small>SMALL PEOPLE. BIG INTERNET.</small></button>
+          <button class="ticker-item" data-owner="@RHEA" data-avatar="RH" data-message="GOOD LUCK KEEPING THIS." data-views="1,104"><strong>@RHEA <i></i></strong><small>GOOD LUCK KEEPING THIS.</small></button>
+          <button class="ticker-item" data-owner="@MORO" data-avatar="MO" data-message="THE INTERNET REMEMBERS." data-views="677"><strong>@MORO <i></i></strong><small>THE INTERNET REMEMBERS.</small></button>
+          <div class="ticker-manifesto">ONE SCREEN.<br>ONE OWNER.<br>TAKE IT BACK.</div>
+          <div class="ticker-label" aria-hidden="true">RECENT<br>TAKEOVERS</div>
+          <button class="ticker-item" aria-hidden="true" tabindex="-1"><strong>@NOVA <i></i></strong><small>YOU HAD THE SCREEN. I TOOK IT.</small></button>
+          <button class="ticker-item" aria-hidden="true" tabindex="-1"><strong>@KAI <i></i></strong><small>SMALL PEOPLE. BIG INTERNET.</small></button>
+          <button class="ticker-item" aria-hidden="true" tabindex="-1"><strong>@RHEA <i></i></strong><small>GOOD LUCK KEEPING THIS.</small></button>
+          <button class="ticker-item" aria-hidden="true" tabindex="-1"><strong>@MORO <i></i></strong><small>THE INTERNET REMEMBERS.</small></button>
+          <div class="ticker-manifesto" aria-hidden="true">ONE SCREEN.<br>ONE OWNER.<br>TAKE IT BACK.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="how">
+      <header class="section-head reveal"><span class="section-index">02 / THE RULES</span><h2>THREE MOVES.<br>ONE WINNER.</h2></header>
+      <div class="mechanics reveal">
+        <article class="mechanic"><span class="num">01 / WATCH</span><h3>SEE WHO OWNS IT.</h3><p>The same message is live for everyone, everywhere. There is no feed to hide inside.</p><span class="ghost-num" aria-hidden="true">1</span></article>
+        <article class="mechanic"><span class="num">02 / CHALLENGE</span><h3>CHOOSE YOUR WORDS.</h3><p>Pick one approved message. Your take balance makes every attempt a decision.</p><span class="ghost-num" aria-hidden="true">2</span></article>
+        <article class="mechanic"><span class="num">03 / TAKE</span><h3>OWN THE INTERNET.</h3><p>Win the screen and defend your reign. It lasts until somebody takes your place.</p><span class="ghost-num" aria-hidden="true">3</span></article>
+      </div>
+    </section>
+
+    <section class="section hall" id="hall">
+      <header class="section-head reveal"><span class="section-index">03 / HALL OF FAME</span><h2>THE INTERNET<br>REMEMBERS.</h2></header>
+      <div class="hall-grid reveal">
+        <div class="reign-list">
+          <article class="reign-row"><b class="rank">01</b><div><strong>@BOWEII</strong><span>LONGEST REIGN / LONDON, UK</span></div><time>10:46:47</time></article>
+          <article class="reign-row"><b class="rank">02</b><div><strong>@NOVA</strong><span>12 TAKEOVERS / MANCHESTER, UK</span></div><time>08:47:32</time></article>
+          <article class="reign-row"><b class="rank">03</b><div><strong>@RUTHIEEE</strong><span>97 VERIFIED VIEWS / BRISTOL, UK</span></div><time>04:19:08</time></article>
+          <article class="reign-row"><b class="rank">04</b><div><strong>@CHASE</strong><span>MOST RETURNED / NEW YORK, US</span></div><time>02:58:51</time></article>
+        </div>
+        <aside class="hall-poster"><small>YOUR NAME COULD BE HERE</small><strong>MAKE<br>EVERY<br>SECOND<br>COUNT.</strong><p>Your reign, verified views and place in the Hall are recorded live for everyone.</p></aside>
+      </div>
+    </section>
+
+    <section class="section download" id="download">
+      <div class="download-inner reveal">
+        <span class="section-index">04 / ENTER THE LIVE WORLD</span>
+        <h2>DON'T POST.<br>TAKE CONTROL.</h2>
+        <p>The web can watch. Only the app can steal. Download ONE for Android and see how long you can keep the world's only screen.</p>
+        <div class="download-actions"><a class="button acid" href="downloads/ONE-Android-preview.apk" download><span>DOWNLOAD APK</span><span class="arrow">↓</span></a><span class="button" aria-disabled="true"><span>GOOGLE PLAY / COMING SOON</span></span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer><span>© 2026 ONE / THE ONLY LIVE MESSAGE</span><nav><a href="privacy">PRIVACY</a><a href="terms">TERMS</a><a href="delete-account">DELETE ACCOUNT</a></nav></footer>
+
+  <script>
+    const $ = (selector) => document.querySelector(selector);
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const root = document.documentElement;
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    const experienceAccents = {
+      live: { hex: '#d7ff00', rgb: '215, 255, 0' },
+      taken: { hex: '#ff4d35', rgb: '255, 77, 53' },
+      verified: { hex: '#4f74ff', rgb: '79, 116, 255' }
+    };
+    function setExperienceAccent(state = 'live') {
+      const accent = experienceAccents[state] || experienceAccents.live;
+      root.style.setProperty('--acid', accent.hex);
+      root.style.setProperty('--state-accent', accent.hex);
+      root.style.setProperty('--state-accent-rgb', accent.rgb);
+      themeColor?.setAttribute('content', accent.hex);
+    }
+    setExperienceAccent('live');
+
+    if (!reduceMotion && matchMedia('(pointer:fine)').matches) {
+      addEventListener('pointermove', (event) => {
+        root.style.setProperty('--mx', `${event.clientX}px`);
+        root.style.setProperty('--my', `${event.clientY}px`);
+      }, { passive: true });
+    }
+
+    /* Scroll-driven wall of screens, adapted from the supplied transition. */
+    const scrollHero = $('.hero');
+    const heroGrid = $('#hero-grid');
+    const wallCanvas = $('#screen-wall');
+    const wallContext = wallCanvas.getContext('2d', { alpha: false });
+    const scrollVignette = $('#scroll-vignette');
+    const scrollHint = $('#scroll-hint');
+    const scrollChapters = [...document.querySelectorAll('.scroll-chapter')];
+    const progressBar = $('.scroll-progress');
+    let scrollProgress = 0;
+    let wallWidth = 0;
+    let wallHeight = 0;
+    let wallDpr = 1;
+    let wallVisible = true;
+    let wallPointer = { x: 0, y: 0, tx: 0, ty: 0 };
+    let wallLastMessage = '';
+    let wallPreviousMessage = '';
+    let wallFlipStarted = -1e9;
+
+    const clamp = (value, min = 0, max = 1) => Math.max(min, Math.min(max, value));
+    const smooth = (value) => value * value * (3 - 2 * value);
+    const range = (value, from, to) => smooth(clamp((value - from) / (to - from)));
+
+    function resizeWall() {
+      wallDpr = Math.min(devicePixelRatio || 1, innerWidth < 680 ? 1.25 : 1.75);
+      wallWidth = innerWidth;
+      wallHeight = innerHeight;
+      wallCanvas.width = Math.round(wallWidth * wallDpr);
+      wallCanvas.height = Math.round(wallHeight * wallDpr);
+      wallCanvas.style.width = `${wallWidth}px`;
+      wallCanvas.style.height = `${wallHeight}px`;
+      wallContext.setTransform(wallDpr, 0, 0, wallDpr, 0, 0);
+    }
+
+    function updateScrollScene() {
+      const start = scrollHero.offsetTop;
+      const distance = Math.max(1, scrollHero.offsetHeight - innerHeight);
+      scrollProgress = clamp((scrollY - start) / distance);
+      const intro = range(scrollProgress, .025, .17);
+      heroGrid.style.opacity = String(1 - intro);
+      heroGrid.style.transform = `scale(${1 - intro * .035})`;
+      heroGrid.style.filter = `blur(${intro * 5}px)`;
+      wallCanvas.style.opacity = String(range(scrollProgress, .08, .18));
+      scrollVignette.style.opacity = String(range(scrollProgress, .14, .25));
+      scrollHint.style.opacity = scrollProgress < .035 ? '1' : '0';
+      progressBar.style.setProperty('--progress', `${Math.round(scrollProgress * 100)}%`);
+      scrollChapters.forEach((chapter) => {
+        const from = Number(chapter.dataset.from);
+        const to = Number(chapter.dataset.to);
+        chapter.classList.toggle('on', scrollProgress >= from && scrollProgress < to);
+      });
+      const box = scrollHero.getBoundingClientRect();
+      wallVisible = box.bottom > 0 && box.top < innerHeight;
+    }
+
+    addEventListener('resize', () => { resizeWall(); updateScrollScene(); }, { passive: true });
+    addEventListener('scroll', updateScrollScene, { passive: true });
+    if (!reduceMotion && matchMedia('(pointer:fine)').matches) {
+      addEventListener('pointermove', (event) => {
+        wallPointer.tx = (event.clientX / innerWidth - .5) * 2;
+        wallPointer.ty = (event.clientY / innerHeight - .5) * 2;
+      }, { passive: true });
+    }
+
+    const CARD_W = 286;
+    const CARD_H = 474;
+    const CARD_GAP = 24;
+    const lineCache = new Map();
+
+    function wrappedLines(text, width, size) {
+      const key = `${text}|${width}|${size}`;
+      if (lineCache.has(key)) return lineCache.get(key);
+      wallContext.font = `900 ${size}px Archivo, Arial, sans-serif`;
+      const lines = [];
+      let current = '';
+      text.split(/\s+/).forEach((word) => {
+        const candidate = current ? `${current} ${word}` : word;
+        if (current && wallContext.measureText(candidate).width > width) { lines.push(current); current = word; }
+        else current = candidate;
+      });
+      if (current) lines.push(current);
+      lineCache.set(key, lines);
+      return lines;
+    }
+
+    function screenCard(x, y, scale, index, currentMessage, currentOwner, hot = false) {
+      wallContext.save();
+      wallContext.translate(x, y);
+      wallContext.beginPath();
+      wallContext.roundRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 24);
+      wallContext.fillStyle = hot ? '#180704' : index % 13 === 0 ? '#111207' : '#0b0b0d';
+      wallContext.fill();
+      wallContext.lineWidth = 1.5;
+      wallContext.strokeStyle = hot ? 'rgba(255,77,53,.8)' : index % 13 === 0 ? 'rgba(215,255,0,.38)' : 'rgba(242,240,233,.14)';
+      wallContext.stroke();
+      wallContext.clip();
+
+      const glow = wallContext.createLinearGradient(0, -CARD_H / 2, 0, 80);
+      glow.addColorStop(0, hot ? 'rgba(255,77,53,.22)' : 'rgba(215,255,0,.13)');
+      glow.addColorStop(1, hot ? 'rgba(255,77,53,0)' : 'rgba(215,255,0,0)');
+      wallContext.fillStyle = glow;
+      wallContext.fillRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H * .7);
+
+      if (scale > .34) {
+        wallContext.textAlign = 'left';
+        wallContext.fillStyle = '#d7ff00';
+        wallContext.font = '800 13px "JetBrains Mono", monospace';
+        wallContext.fillText('1  LIVE', -CARD_W / 2 + 22, -CARD_H / 2 + 35);
+        wallContext.textAlign = 'right';
+        wallContext.fillStyle = '#85858d';
+        wallContext.fillText(currentOwner, CARD_W / 2 - 22, -CARD_H / 2 + 35);
+        wallContext.textAlign = 'left';
+        const fontSize = 33;
+        const lines = wrappedLines(currentMessage, CARD_W - 48, fontSize).slice(0, 7);
+        const startY = -((lines.length - 1) * fontSize * .48);
+        wallContext.font = `900 ${fontSize}px Archivo, Arial, sans-serif`;
+        wallContext.fillStyle = '#f2f0e9';
+        lines.forEach((line, lineIndex) => wallContext.fillText(line, -CARD_W / 2 + 24, startY + lineIndex * fontSize * 1.01));
+        wallContext.fillStyle = '#d7ff00';
+        wallContext.fillRect(-CARD_W / 2 + 24, startY + lines.length * fontSize + 11, 66, 5);
+        wallContext.fillStyle = '#5f5f66';
+        wallContext.font = '700 11px "JetBrains Mono", monospace';
+        wallContext.fillText('THE ONLY LIVE MESSAGE', -CARD_W / 2 + 24, CARD_H / 2 - 32);
+      } else {
+        wallContext.fillStyle = 'rgba(242,240,233,.9)';
+        wallContext.fillRect(-CARD_W / 2 + 34, -74, CARD_W - 68, 39);
+        wallContext.fillRect(-CARD_W / 2 + 34, -24, CARD_W - 126, 39);
+        wallContext.fillStyle = 'rgba(215,255,0,.78)';
+        wallContext.fillRect(-CARD_W / 2 + 34, 42, 74, 12);
+      }
+      wallContext.restore();
+    }
+
+    function drawWall(time) {
+      requestAnimationFrame(drawWall);
+      if (reduceMotion || !wallVisible) return;
+      wallPointer.x += (wallPointer.tx - wallPointer.x) * .055;
+      wallPointer.y += (wallPointer.ty - wallPointer.y) * .055;
+      wallContext.setTransform(wallDpr, 0, 0, wallDpr, 0, 0);
+      wallContext.fillStyle = '#070708';
+      wallContext.fillRect(0, 0, wallWidth, wallHeight);
+
+      const travel = range(scrollProgress, .09, .88);
+      const zoom = 1.08 * Math.pow(.14 / 1.08, travel);
+      const currentMessage = ($('#message').textContent || 'THE INTERNET HAS ONE SCREEN.').toUpperCase();
+      const currentOwner = $('#owner').textContent || '@ONE';
+      if (!wallLastMessage) wallLastMessage = currentMessage;
+      if (currentMessage !== wallLastMessage) {
+        wallPreviousMessage = wallLastMessage;
+        wallLastMessage = currentMessage;
+        wallFlipStarted = time;
+      }
+      const sinceFlip = (time - wallFlipStarted) / 1000;
+      const driftX = Math.sin(time / 7800) * 24 * travel - wallPointer.x * 36 * travel;
+      const driftY = Math.cos(time / 9400) * 18 * travel - wallPointer.y * 25 * travel;
+      wallContext.save();
+      wallContext.translate(wallWidth / 2 + driftX, wallHeight / 2 + driftY);
+      wallContext.scale(zoom, zoom);
+      const spanX = Math.min(11, Math.ceil(wallWidth / (2 * zoom * (CARD_W + CARD_GAP))) + 2);
+      const spanY = Math.min(7, Math.ceil(wallHeight / (2 * zoom * (CARD_H + CARD_GAP))) + 2);
+      let index = 0;
+      for (let row = -spanY; row <= spanY; row += 1) {
+        for (let column = -spanX; column <= spanX; column += 1) {
+          const stagger = row % 2 ? (CARD_W + CARD_GAP) / 2 : 0;
+          const delay = Math.hypot(column, row) * .055;
+          const localFlip = sinceFlip - delay;
+          let flipAmount = 0;
+          let cardMessage = currentMessage;
+          if (wallPreviousMessage && localFlip < 0) cardMessage = wallPreviousMessage;
+          else if (wallPreviousMessage && localFlip < .32) {
+            flipAmount = Math.sin(clamp(localFlip / .32) * Math.PI);
+            cardMessage = localFlip > .16 ? currentMessage : wallPreviousMessage;
+          }
+          wallContext.save();
+          wallContext.translate(column * (CARD_W + CARD_GAP) + stagger, row * (CARD_H + CARD_GAP));
+          wallContext.scale(1, 1 - flipAmount * .93);
+          screenCard(0, 0, zoom, index++, cardMessage, currentOwner, flipAmount > .46);
+          wallContext.restore();
+        }
+      }
+      wallContext.restore();
+    }
+
+    resizeWall();
+    updateScrollScene();
+    requestAnimationFrame(drawWall);
+
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) { entry.target.classList.add('in'); revealObserver.unobserve(entry.target); }
+      });
+    }, { threshold: .12 });
+    document.querySelectorAll('.reveal').forEach((node) => revealObserver.observe(node));
+
+    const pad = (value) => String(value).padStart(2, '0');
+    setInterval(() => {
+      const now = new Date();
+      $('#utc').textContent = `UTC ${now.getUTCFullYear()}.${pad(now.getUTCMonth()+1)}.${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
+    }, 1000);
+
+    let reignSeconds = 8 * 3600 + 47 * 60 + 32;
+    setInterval(() => {
+      reignSeconds += 1;
+      const time = `${pad(Math.floor(reignSeconds / 3600))}:${pad(Math.floor((reignSeconds % 3600) / 60))}:${pad(reignSeconds % 60)}`;
+      $('#reign').textContent = time;
+      $('#side-reign').textContent = time;
+    }, 1000);
+
+    const stage = $('.live-stage');
+    document.querySelectorAll('.ticker-item[data-owner]').forEach((item) => item.addEventListener('click', () => {
+      if (stage.classList.contains('switching')) return;
+      setExperienceAccent('taken');
+      stage.classList.add('switching');
+      setTimeout(() => {
+        $('#owner').textContent = item.dataset.owner;
+        $('#avatar').textContent = item.dataset.avatar;
+        $('#message').textContent = item.dataset.message;
+        $('#views').textContent = item.dataset.views;
+        $('#location').textContent = 'OWNS ONE // LIVE WORLD STATE';
+        reignSeconds = 0;
+        const currentTakeovers = Number($('#takeovers').textContent.replace(/,/g, '')) || 0;
+        $('#takeovers').textContent = new Intl.NumberFormat().format(currentTakeovers + 1);
+        setExperienceAccent('verified');
+      }, 360);
+      setTimeout(() => {
+        stage.classList.remove('switching');
+        setExperienceAccent('live');
+      }, 1100);
+    }));
+
+    const SUPABASE_URL = 'https://ajkdzohnntrbkeqjskel.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_PGTCO8gqoSrbPgjxXbYqdg_F_D6oqO-';
+    const formatDuration = (milliseconds) => {
+      const total = Math.max(0, Math.floor(milliseconds / 1000));
+      return `${pad(Math.floor(total / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
+    };
+    async function loadLiveState() {
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_one_state`, {
+          method: 'POST', headers: { apikey: SUPABASE_KEY, authorization: `Bearer ${SUPABASE_KEY}`, 'content-type': 'application/json' }, body: '{}'
+        });
+        if (!response.ok) return;
+        const state = await response.json();
+        if (!state?.reign) return;
+        $('#owner').textContent = state.reign.owner.handle;
+        $('#avatar').textContent = state.reign.owner.initials;
+        $('#location').textContent = `OWNS ONE // ${state.reign.owner.city || 'WORLD'}, ${state.reign.owner.country_code || 'LIVE'}`;
+        $('#message').textContent = state.reign.message.text;
+        $('#watchers').textContent = new Intl.NumberFormat().format(state.live_watchers || 0);
+        $('#takeovers').textContent = new Intl.NumberFormat().format(state.takeovers_today || 0);
+        $('#views').textContent = new Intl.NumberFormat().format((state.app_views || 0) + (state.web_views || 0));
+        reignSeconds = Math.max(0, Math.floor((Date.now() - state.reign.started_at_ms) / 1000));
+        const time = formatDuration(Date.now() - state.reign.started_at_ms);
+        $('#reign').textContent = time; $('#side-reign').textContent = time;
+      } catch (_) { /* The art-directed demo remains useful offline. */ }
+    }
+    loadLiveState();
+    setInterval(loadLiveState, 12000);
+  </script>
+</body>
+</html>

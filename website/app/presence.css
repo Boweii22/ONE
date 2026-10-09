@@ -1,0 +1,70 @@
+/* ONE / presence — an automatic, silent product premiere. */
+.one-presence{--presence-ease:cubic-bezier(.16,1,.3,1)}
+.one-presence .trump-hero{padding-top:40px;min-height:860px;background:#080a08}
+.one-presence .trump-hero:before{background:radial-gradient(ellipse at 50% 76%,#d7ff0010,transparent 65%)}
+.presence-atmosphere{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.presence-atmosphere>div{position:absolute;border-radius:50%;filter:blur(70px);opacity:.2;animation:presence-light 14s ease-in-out infinite alternate}
+.presence-atmosphere>div:nth-child(1){width:45%;height:340px;background:#d7ff00;left:-30%;top:48%}
+.presence-atmosphere>div:nth-child(2){width:40%;height:380px;background:#4fc8de;right:-32%;top:32%;animation-delay:-7s}
+.presence-atmosphere>div:nth-child(3){width:50%;height:130px;background:#d7ff00;left:25%;bottom:-110px;opacity:.18}
+.one-presence .trump-hero-heading{display:flex;flex-direction:column;align-items:center;text-align:center;gap:0;z-index:2}
+.one-presence .trump-hero-heading>.one-eyebrow{color:#a2ad96;letter-spacing:.2em;font-size:9px}
+.one-presence .trump-hero h1{font-size:clamp(60px,7.6vw,118px);line-height:1.01;letter-spacing:-.025em;margin:22px 0 16px;animation:presence-title 1.2s var(--presence-ease) both}
+.one-presence .trump-hero h1 span{color:#d7ff00;text-shadow:0 0 80px #d7ff0015}
+.one-presence .trump-hero-heading>p{max-width:none;margin:0;color:#929b89;font-size:12px;line-height:1.8;animation:presence-title 1.2s .15s var(--presence-ease) both}
+.one-presence .trump-stage-shell{height:410px;margin-top:28px;max-width:1120px;perspective:1400px}
+.presence-orbit{position:absolute;left:50%;top:49%;width:112%;height:52%;border:1px solid #d7ff0025;border-radius:50%;transform:translate(-50%,-50%) rotate(-12deg);pointer-events:none;z-index:-1;box-shadow:0 0 30px #d7ff0006;animation:presence-orbit 16s ease-in-out infinite alternate}
+.presence-orbit-two{width:85%;height:90%;border-color:#e8efdf12;transform:translate(-50%,-50%) rotate(16deg);animation-delay:-8s}
+.presence-orbit:after{content:'';position:absolute;right:9%;top:10%;width:6px;height:6px;border-radius:50%;background:#d7ff00;box-shadow:0 0 16px #d7ff00}
+.one-device{position:relative;width:100%;filter:drop-shadow(0 30px 25px #0006)}
+.device-metal{position:relative;padding:5px;border-radius:30px;background:linear-gradient(115deg,#bec3bf 0%,#555d57 3%,#151a17 9%,#707770 48%,#222a24 85%,#9aa297 100%);box-shadow:inset 0 0 0 1px #cdd6c670,0 0 0 1px #000,0 0 0 2px #8c97833b}
+.device-glass{position:relative;overflow:hidden;border-radius:25px;background:#050605;border:3px solid #070a08;box-shadow:0 0 0 1px #000,inset 0 0 0 1px #89968130}
+.device-glass img{width:100%;height:auto;display:block;border:0!important}
+.device-camera{position:absolute;left:50%;top:7px;transform:translateX(-50%);width:7px;height:7px;background:radial-gradient(circle at 40% 40%,#243342 0%,#080e13 30%,#000 65%);border-radius:50%;box-shadow:0 0 0 2px #000,0 0 0 3px #222921;pointer-events:none}
+.device-reflection{position:absolute;inset:0;pointer-events:none;background:linear-gradient(112deg,#ffffff12 0%,#ffffff03 21%,transparent 21.5%,transparent 72%,#ffffff06 100%);border-radius:inherit;box-shadow:inset 1px 0 2px #ffffff26}
+.device-button{position:absolute;width:3px;border-radius:2px;background:linear-gradient(#828b80,#222b22,#727d6e);box-shadow:0 0 1px #fff5}
+.device-volume{left:-3px;top:18%;height:12%}.device-power{right:-3px;top:29%;height:8%}
+.presence-device-left,.presence-device-right{position:absolute;width:19%;max-width:202px;top:0;z-index:2;animation:presence-float 8s ease-in-out infinite;will-change:translate}
+.presence-device-left{left:3%;transform:rotate(-12deg) rotateY(20deg)}
+.presence-device-right{right:3%;transform:rotate(12deg) rotateY(-20deg);animation-delay:-4s}
+.one-presence .trump-coordinate{top:370px;font-size:6px;opacity:.7}
+.one-presence .trump-screen-wall{inset:40px -8% 70px;opacity:.13;transform:rotateX(20deg) rotateZ(-8deg);mask-image:radial-gradient(ellipse,#000,transparent 70%)}
+.one-presence .trump-broadcast{position:absolute;left:25%;top:55px;width:50%;height:260px;margin:0;padding:19px 23px;border-radius:5px;transform:rotate(-2deg);box-shadow:0 0 0 1px #d7ff0020,0 0 0 9px #d7ff0003,0 35px 70px #000c;animation:presence-screen .85s var(--presence-ease) both;z-index:3}
+.one-presence.screen-taken .trump-broadcast{transform:rotate(2deg);animation-name:presence-screen-taken}
+.one-presence .trump-message{font-size:clamp(35px,5.3vw,75px);max-height:185px}
+.one-presence .trump-message.has-custom-message{font-size:clamp(20px,3vw,41px)}
+.one-presence .trump-broadcast-head{font-size:6px}.one-presence .trump-broadcast-foot{font-size:6px}
+.one-presence .trump-take-button{bottom:35px;border-radius:40px;min-width:255px;padding:14px 22px;box-shadow:0 0 50px #d7ff0018,0 12px 35px #0006;transition:box-shadow .3s,background .3s}
+.one-presence .trump-take-button:hover{box-shadow:0 0 0 7px #d7ff0012,0 0 65px #d7ff0030}
+.one-presence .trump-orbit-label{display:none}
+.presence-sequence{position:absolute;bottom:0;left:50%;transform:translateX(-50%);font:7px var(--font-geist-mono),monospace;letter-spacing:.1em;color:#939e83;display:flex;gap:12px;align-items:center;white-space:nowrap}
+.presence-progress{position:relative;width:35px;height:2px;background:#d7ff0025;overflow:hidden}
+.presence-progress:after{content:'';position:absolute;inset:0;background:#d7ff00;transform-origin:left;animation:presence-progress 4.2s linear both}
+.presence-motion-control{border:0;background:transparent;color:#b1b9a4;white-space:nowrap;font:9px var(--font-geist-mono),monospace;padding:12px;cursor:pointer}
+.presence-motion-control:hover{color:#d7ff00}.presence-motion-control:disabled{cursor:default;color:#88917c}
+.one-presence .trump-hero-bottom{margin-top:20px;gap:10px}.one-presence .one-demo-tabs button{border-radius:30px}
+.one-presence .trump-hero-caption{margin-top:19px}
+.one-presence .trump-product-visual{perspective:1000px;min-height:660px}
+.one-presence .trump-product-visual:before{inset:100px -25px 50px;border-radius:50%;background:radial-gradient(ellipse,#c9d7b4,transparent 70%);border:1px solid #8c9b7120;transform:rotate(-20deg)}
+.one-presence .trump-product-visual figure{width:64%;max-width:270px;box-shadow:none;background:transparent;animation:presence-product .9s var(--presence-ease) both;transform:rotate(4deg) rotateY(-12deg)}
+.one-presence .trump-product-visual .one-device{filter:drop-shadow(15px 30px 20px #101a1233)}
+.one-presence .trump-product-visual figcaption{background:transparent;color:#707b60;font-size:6px;padding:25px 0;white-space:nowrap}
+.one-presence .trump-feature-choices>button{position:relative;transition:color .3s,padding .3s}
+.one-presence .trump-feature-choices>button[aria-pressed=true]{padding-left:12px}
+.one-presence .trump-feature-choices>button[aria-pressed=true]:before{content:'';position:absolute;left:0;top:20px;bottom:20px;width:2px;background:#10110e}
+.one-presence.auto-running .trump-feature-choices>button[aria-pressed=true]:after{content:'';position:absolute;bottom:-1px;left:0;height:2px;width:100%;background:#8b9c65;transform-origin:left;animation:presence-progress 6s linear both}
+.one-presence .one-button{transition:transform .3s var(--presence-ease),box-shadow .3s,background .3s}
+.one-presence .one-button:hover{transform:translateY(-3px)}
+.one-presence.auto-paused .presence-device-left,.one-presence.auto-paused .presence-device-right,.one-presence.auto-paused .presence-orbit,.one-presence.auto-paused .presence-atmosphere>div,.one-presence.auto-paused .trump-marquee>div,.one-presence.auto-paused .presence-progress:after{animation-play-state:paused}
+@keyframes presence-title{from{opacity:0;transform:translateY(28px);filter:blur(7px)}to{opacity:1;transform:none;filter:blur(0)}}
+@keyframes presence-screen{from{opacity:0;transform:translateY(35px) rotate(-6deg) scale(.9);filter:blur(5px)}to{opacity:1;transform:rotate(-2deg);filter:blur(0)}}
+@keyframes presence-screen-taken{from{opacity:.5;transform:translateY(-25px) rotate(6deg) scale(.96)}to{opacity:1;transform:rotate(2deg)}}
+@keyframes presence-float{0%,100%{translate:0 0}50%{translate:0 -13px}}
+@keyframes presence-orbit{to{rotate:8deg;scale:1.04}}
+@keyframes presence-light{to{translate:15% -12%;opacity:.3}}
+@keyframes presence-progress{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes presence-product{from{opacity:0;transform:translateY(40px) rotate(-5deg) rotateY(25deg)}to{opacity:1;transform:rotate(4deg) rotateY(-12deg)}}
+@media(min-width:1500px){.one-presence .trump-hero{min-height:940px;padding-top:50px}.one-presence .trump-stage-shell{height:440px}.one-presence .trump-coordinate{top:400px}}
+@media(max-width:1000px){.one-presence .trump-hero{min-height:790px}.one-presence .trump-hero h1{font-size:8.6vw}.one-presence .trump-stage-shell{height:370px}.one-presence .trump-broadcast{top:35px;height:240px;padding:16px 19px}.one-presence .trump-coordinate{top:325px}.one-presence .trump-message{font-size:5.7vw}.one-presence .trump-hero-bottom{flex-wrap:wrap}.one-presence .trump-product-visual{min-height:540px}}
+@media(max-width:700px){.one-presence .trump-hero{padding:34px 6% 24px;min-height:0}.one-presence .trump-hero-heading>.one-eyebrow{font-size:6px;letter-spacing:.14em}.one-presence .trump-hero h1{font-size:11.4vw;margin:24px 0 17px;line-height:1.08}.one-presence .trump-hero-heading>p{font-size:10px;max-width:295px}.one-presence .trump-stage-shell{height:350px;margin-top:34px}.presence-device-left,.presence-device-right{width:34%;top:0;max-width:145px}.presence-device-left{left:-5%;transform:rotate(-13deg) rotateY(15deg)}.presence-device-right{right:-5%;transform:rotate(13deg) rotateY(-15deg)}.device-metal{border-radius:20px;padding:4px}.device-glass{border-radius:16px;border-width:2px}.device-camera{width:5px;height:5px;top:5px}.one-presence .trump-broadcast{top:90px;left:10%;width:80%;height:180px;padding:13px 15px;border-radius:3px}.one-presence .trump-message{font-size:9vw;max-height:120px;padding:10px 0}.one-presence .trump-message.has-custom-message{font-size:6vw}.one-presence .trump-broadcast-head{font-size:4px}.one-presence .trump-broadcast-foot{font-size:4px;padding-top:8px}.one-presence .trump-take-button{bottom:28px;min-width:218px;padding:12px 18px;font-size:9px}.presence-sequence{font-size:5px;bottom:2px}.presence-orbit{width:150%;height:40%;top:50%}.presence-orbit-two{width:115%;height:75%}.one-presence .trump-hero-bottom{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:22px}.one-presence .one-demo-tabs{grid-column:1/-1}.presence-motion-control{font-size:8px;padding:12px 0}.one-presence .one-film-link{font-size:9px;justify-content:center}.one-presence .trump-hero-caption{font-size:5px;margin-top:10px}.one-presence .trump-product-visual{min-height:0}.one-presence .trump-product-visual figure{width:72%;max-width:245px}.one-presence .trump-product-visual .device-metal{border-radius:30px;padding:5px}.one-presence .trump-product-visual .device-glass{border-radius:25px;border-width:3px}.one-presence .trump-product-visual figcaption{font-size:6px}.one-presence .trump-product-visual:before{inset:100px -5px 25px}}
+@media(prefers-reduced-motion:reduce){.one-presence *,.one-presence *:before,.one-presence *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.one-presence .trump-takeover-flash{display:none}.presence-progress:after{transform:none}.one-presence .one-button:hover{transform:none}}

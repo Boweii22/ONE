@@ -1,0 +1,36 @@
+html:has(.experience-route),
+body:has(.experience-route) {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #070708;
+}
+
+.experience-route {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #070708;
+}
+
+.experience-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #070708;
+}
+
+.experience-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 24px;
+  color: #f2f0e9;
+  background: #070708;
+  font: 700 16px/1.5 monospace;
+}
+
+.experience-fallback a { color: #d7ff00; }
